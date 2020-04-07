@@ -1,44 +1,72 @@
--- programs ------------------------------------------------
+-- Programs ------------------------------------------------
 
 entrypoints Program ;
 
-Program.   Program ::= [TopDef] ;
+Prog.      Program ::= [TopDef] ;
 
-FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
+TopFDef.   TopDef ::= FDef ;
+
+TopSDef.   TopDef ::= SDef ";" ;
+
+TopVDecl.  TopDef ::= VDecl ";" ;
 
 separator nonempty TopDef "" ;
 
-Arg. 	   Arg ::= Type Ident;
+-- Definitions & Declarations ---------------------------------------------
+
+FnDef.     FDef ::= FType Ident "(" [Arg] ")" Block ;
+
+ValArg.    Arg ::= VType Ident ;
+
+RefArg.    Arg ::= VType "&" Ident ;
 
 separator  Arg "," ;
 
--- statements ----------------------------------------------
+VarDecl.   VDecl ::= VType [Item] ;
 
-Block.     Block ::= "{" [Stmt] "}" ;
+separator  VDecl "," ;
 
-separator  Stmt "" ;
-
-Empty.     Stmt ::= ";" ;
-
-BStmt.     Stmt ::= Block ;
-
-Decl.      Stmt ::= Type [Item] ";" ;
-
-NoInit.    Item ::= Ident ; 
+NoInit.    Item ::= Ident ;
 
 Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr  ";" ;
+StructDef. SDef  ::= "struct" Ident "{" [VDecl] "}" ;
 
-Incr.      Stmt ::= Ident "++"  ";" ;
+-- Types ---------------------------------------------------
 
-Decr.      Stmt ::= Ident "--"  ";" ;
+Int.       VType ::= "int" ;
 
-Ret.       Stmt ::= "return" Expr ";" ;
+String.    VType ::= "string" ;
 
-VRet.      Stmt ::= "return" ";" ;
+Bool.      VType ::= "bool" ;
+
+Struct.    VType ::= "struct" Ident ;
+
+FTypeRet.  FType ::= VType ;
+
+FTypeVoid. FType ::= "void" ;
+
+separator  VType "," ;
+
+-- Statements ----------------------------------------------
+
+Blk.       Block ::= "{" [Stmt] "}" ;
+
+Empty.     Stmt ::= ";" ;
+
+BlockStmt. Stmt ::= Block ;
+
+DeclStmt.  Stmt ::= VDecl ";" ;
+
+DefStmt.   Stmt ::= SDef ";" ;
+
+Assign.    Stmt ::= Ident "=" Expr  ";" ;
+
+RetVal.    Stmt ::= "return" Expr ";" ;
+
+Return.    Stmt ::= "return" ";" ;
 
 Cond.      Stmt ::= "if" "(" Expr ")" Stmt  ;
 
@@ -46,35 +74,37 @@ CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-SExp.      Stmt ::= Expr  ";" ;
+For.       Stmt ::= "for" Ident "=" Expr UpDown "to" Expr "do" Stmt ;
 
--- Types ---------------------------------------------------
+Up.        UpDown ::= "down" ;
 
-Int.       Type ::= "int" ;
+Down.      UpDown ::= "up" ;
 
-Str.       Type ::= "string" ;
+Break.     Stmt ::= "break" ";" ;
 
-Bool.      Type ::= "boolean" ;
+Continue.  Stmt ::= "continue" ";" ;
 
-Void.      Type ::= "void" ;
+SExp.      Stmt ::= Expr ";" ;
 
-internal   Fun. Type ::= Type "(" [Type] ")" ;
+separator  Stmt "" ;
 
-separator  Type "," ;
+-- Expressions ----------------------------------------------
 
--- Expressions ---------------------------------------------
+EVar.      Expr7 ::= Ident ;
 
-EVar.      Expr6 ::= Ident ;
+ELitInt.   Expr7 ::= Integer ;
 
-ELitInt.   Expr6 ::= Integer ;
+ELitTrue.  Expr7 ::= "true" ;
 
-ELitTrue.  Expr6 ::= "true" ;
+ELitFalse. Expr7 ::= "false" ;
 
-ELitFalse. Expr6 ::= "false" ;
+EStruct.   Expr7 ::= "{" [Item] "}" ;
 
-EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+EApp.      Expr7 ::= Ident "(" [Expr] ")" ;
 
-EString.   Expr6 ::= String ;
+EString.   Expr7 ::= String ;
+
+EDot.      Expr6 ::= Expr7 "." Ident ;
 
 Neg.       Expr5 ::= "-" Expr6 ;
 
@@ -84,17 +114,17 @@ EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 
 EAdd.      Expr3 ::= Expr3 AddOp Expr4 ;
 
-ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
+ECmp.      Expr2 ::= Expr2 CmpOp Expr3 ;
 
 EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 6 ;
+coercions  Expr 7 ;
 
 separator  Expr "," ;
 
--- operators -----------------------------------------------
+-- Operators -----------------------------------------------
 
 Plus.      AddOp ::= "+" ;
 
@@ -106,23 +136,22 @@ Div.       MulOp ::= "/" ;
 
 Mod.       MulOp ::= "%" ;
 
-LTH.       RelOp ::= "<" ;
+-- Comparisons ---------------------------------------------
 
-LE.        RelOp ::= "<=" ;
+LT.       CmpOp ::= "<" ;
 
-GTH.       RelOp ::= ">" ;
+LEQ.      CmpOp ::= "<=" ;
 
-GE.        RelOp ::= ">=" ;
+GT.       CmpOp ::= ">" ;
 
-EQU.       RelOp ::= "==" ;
+GEQ.      CmpOp ::= ">=" ;
 
-NE.        RelOp ::= "!=" ;
+EQ.       CmpOp ::= "==" ;
 
--- comments ------------------------------------------------
+NEQ.      CmpOp ::= "!=" ;
 
-comment    "#" ;
+-- Comments ------------------------------------------------
 
 comment    "//" ;
 
 comment    "/*" "*/" ;
-
