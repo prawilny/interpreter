@@ -14,17 +14,17 @@ separator nonempty TopDef "" ;
 
 -- Definitions & Declarations ---------------------------------------------
 
-FnDef.     FDef ::= FType Ident "(" [Arg] ")" Block ;
+FnDef.     FDef ::= Type Ident "(" [Arg] ")" Block ;
 
-ValArg.    Arg ::= VType Ident ;
+ValArg.    Arg ::= Type Ident ;
 
-RefArg.    Arg ::= VType "&" Ident ;
+RefArg.    Arg ::= Type "&" Ident ;
 
 separator  Arg "," ;
 
-VarDecl.   VDecl ::= VType [Item] ;
+VarDecl.   VDecl ::= Type [Item] ;
 
-separator  VDecl "," ;
+separator  VDecl ";" ;
 
 NoInit.    Item ::= Ident ;
 
@@ -36,19 +36,15 @@ StructDef. SDef  ::= "struct" Ident "{" [VDecl] "}" ;
 
 -- Types ---------------------------------------------------
 
-Int.       VType ::= "int" ;
+Int.       Type ::= "int" ;
 
-String.    VType ::= "string" ;
+String.    Type ::= "string" ;
 
-Bool.      VType ::= "bool" ;
+Bool.      Type ::= "bool" ;
 
-Struct.    VType ::= "struct" Ident ;
+Struct.    Type ::= "struct" Ident ;
 
-FTypeRet.  FType ::= VType ;
-
-FTypeVoid. FType ::= "void" ;
-
-separator  VType "," ;
+Void.      Type ::= "void" ;
 
 -- Statements ----------------------------------------------
 
@@ -70,7 +66,7 @@ Return.    Stmt ::= "return" ";" ;
 
 Cond.      Stmt ::= "if" "(" Expr ")" Stmt  ;
 
-CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
+CondElse.  Stmt ::= "if" "(" Expr ")" Block "else" Block  ;
 
 While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
@@ -98,7 +94,7 @@ ELitTrue.  Expr7 ::= "true" ;
 
 ELitFalse. Expr7 ::= "false" ;
 
-EStruct.   Expr7 ::= "{" [Item] "}" ;
+EStruct.   Expr7 ::= "[" [Item] "]" ;
 
 EApp.      Expr7 ::= Ident "(" [Expr] ")" ;
 
@@ -138,17 +134,17 @@ Mod.       MulOp ::= "%" ;
 
 -- Comparisons ---------------------------------------------
 
-LT.       CmpOp ::= "<" ;
+LTH.       CmpOp ::= "<" ;
 
-LEQ.      CmpOp ::= "<=" ;
+LEQ.       CmpOp ::= "<=" ;
 
-GT.       CmpOp ::= ">" ;
+GTH.       CmpOp ::= ">" ;
 
-GEQ.      CmpOp ::= ">=" ;
+GEQ.       CmpOp ::= ">=" ;
 
-EQ.       CmpOp ::= "==" ;
+EQU.       CmpOp ::= "==" ;
 
-NEQ.      CmpOp ::= "!=" ;
+NEQ.       CmpOp ::= "!=" ;
 
 -- Comments ------------------------------------------------
 
