@@ -32,7 +32,7 @@ Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-StructDef. SDef  ::= "struct" Ident "{" [VDecl] "}" ;
+StructDef. SDef  ::= "struct" Ident "[" [VDecl] "]" ;
 
 -- Types ---------------------------------------------------
 
