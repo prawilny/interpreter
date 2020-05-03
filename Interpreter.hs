@@ -29,7 +29,7 @@ getPositionInfo exp = case exp of
 alloc :: Interpreter Loc
 alloc = do
     store <- get
-    return ((M.size store) + 1)
+    return (if (M.null store) then 1 else fst (M.findMax store))
 
 data Var =
     VInt Integer
