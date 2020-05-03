@@ -4,9 +4,11 @@
 
 entrypoints Program ;
 
-Prog.       Program ::= [SDef] [VDecl] [FDef] ;
+Prog.       Program ::= [VDecl] [FDef] ;
 
 -- Definitions & Declarations ---------------------------------------------
+
+Blk.        Block ::= "{" [VDecl] [Stmt] "}" ;
 
 DFun.       FDef ::= Type Ident "(" [Arg] ")" Block ;
 
@@ -14,41 +16,31 @@ separator   nonempty FDef "" ;
 
 ArgVal.     Arg ::= Type Ident ;
 
-ArgRef.     Arg ::= Type "&" Ident ;
+-- ArgRef.     Arg ::= Type "&" Ident ;
 
 separator   Arg "," ;
 
-DVar.       VDecl ::= Type [Item] ;
+DVar.       VDecl ::= Type Item ";";
 
-separator   VDecl ";" ;
+separator   VDecl "" ;
 
 NoInit.     Item ::= Ident ;
 
 Init.       Item ::= Ident "=" Expr ;
 
-separator   nonempty Item "," ;
-
-StructDef.  SDef  ::= "struct" Ident "[" [VDecl] "]" ;
-
-separator   SDef "" ;
-
 -- Types ---------------------------------------------------
 
 TInt.       Type ::= "int" ;
 
-TString.    Type ::= "string" ;
+-- TString.    Type ::= "string" ;
 
 TBool.      Type ::= "bool" ;
 
-TStruct.    Type ::= "struct" Ident ;
-
-TVoid.      Type ::= "void" ;
+-- TVoid.      Type ::= "void" ;
 
 -- Statements ----------------------------------------------
 
-SBlock.      Stmt ::= Block ;
-
-BBlk.       Block ::= "{" [SDef] [VDecl] [Stmt] "}" ;
+SBlock.     Stmt ::= Block ;
 
 SEmpty.     Stmt ::= ";" ;
 
@@ -64,15 +56,15 @@ SCondElse.  Stmt ::= "if" "(" Expr ")" Block "else" Block  ;
 
 SWhile.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-SFor.       Stmt ::= "for" Ident "=" Expr UpDown "to" Expr "do" Stmt ;
+-- SFor.       Stmt ::= "for" Ident "=" Expr UpDown "to" Expr "do" Stmt ;
 
-RUp.        UpDown ::= "down" ;
+-- RUp.        UpDown ::= "down" ;
 
-RDown.      UpDown ::= "up" ;
+-- RDown.      UpDown ::= "up" ;
 
-SBreak.     Stmt ::= "break" ";" ;
+-- SBreak.     Stmt ::= "break" ";" ;
 
-SContinue.  Stmt ::= "continue" ";" ;
+-- SContinue.  Stmt ::= "continue" ";" ;
 
 SExp.       Stmt ::= Expr ";" ;
 
@@ -88,13 +80,9 @@ ELitTrue.   Expr7 ::= "true" ;
 
 ELitFalse.  Expr7 ::= "false" ;
 
-EStruct.    Expr7 ::= "[" [Item] "]" ;
-
 EApp.       Expr7 ::= Ident "(" [Expr] ")" ;
 
-EString.    Expr7 ::= String ;
-
-EDot.       Expr6 ::= Expr7 "." Ident ;
+-- EString.    Expr7 ::= String ;
 
 Neg.        Expr5 ::= "-" Expr6 ;
 
