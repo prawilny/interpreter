@@ -8,10 +8,9 @@ import Control.Monad.Reader
 
 type PInfo = Maybe(Int, Int)
 
-data Var =
-    VInt Integer
+data Var = VVoid
+    | VInt Integer
     | VBool Bool
-    | VVoid
 
 data Func = VFunc ([Expr PInfo] -> Interpreter Var)
 
@@ -43,6 +42,12 @@ getPositionInfo exp = case exp of
     ECmp pi _ _ _ -> pi
     EAnd pi _ _ -> pi
     EOr pi _ _ -> pi
+
+defaultValue :: Type PInfo -> Interpreter Var
+defaultValue t = do
+    case t of
+        TInt _ -> return (VInt 0)
+        TBool _ -> return (VBool False)
 
 alloc :: Interpreter Loc
 alloc = do
@@ -83,7 +88,7 @@ semExpr expr = do
         EApp pi fName exprs
             -> case M.lookup fName fEnv of
                 Just (VFunc f) -> f exprs
-                _ -> throwError ("function " ++ show fName ++ "undeclared" ++ atPosition (getPositionInfo expr))
+                _ -> throwError ("function " ++ show fName ++ " not declared" ++ atPosition (getPositionInfo expr))
         ENeg _ exp -> do
             val <- semInt exp
             return (VInt (-1 * val))
@@ -126,12 +131,6 @@ semExpr expr = do
             val2 <- semBool exp2
             return (VBool (val1 || val2))
 
-defaultValue :: Type PInfo -> Interpreter Var
-defaultValue t = do
-    case t of
-        TInt _ -> return (VInt 0)
-        TBool _ -> return (VBool False)
-
 semVDecl :: VDecl PInfo -> Interpreter () -> Interpreter ()
 semVDecl (DVar _ t i) interpreter = do
     newLoc <- alloc
@@ -148,7 +147,43 @@ semVDecls :: [VDecl PInfo] -> Interpreter () -> Interpreter ()
 semVDecls ds interpreter = foldl (flip semVDecl) interpreter ds
 
 semFDef :: FDef PInfo -> Interpreter () -> Interpreter ()
-semFDef def interpreter = undefined
+semFDef (DFun pi t fName args (FBody _ decls stmts ret)) interpreter =
+    do
+        (vEnv, fEnv) <- ask
+        let newEnv = (vEnv, fEnv)
+        local (\(vEnv, fEnv) -> (vEnv, (M.insert fName (VFunc f) fEnv))) interpreter
+        where
+            f :: [Expr PInfo] -> Interpreter Var
+            f exprs =
+                do
+                    when (length exprs /= length args) (throwError ("function" ++ show fName ++ "called with wrong number of arguments")) -- TODO: position
+                    postStmtsInterpreter <- semStmts stmts (semVDecls decls (setArgsFromExprs (zip args exprs) interpreter))
+                    case ret of
+                        RetVoid _ -> return VVoid
+                        RetVal _ expr -> do
+                                            retval <- semExpr expr
+                                            return retval
+
+            setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter () -> Interpreter ()
+            setArgFromExpr (ArgVal _ t argName, expr) inter = do
+                newLoc <- alloc
+                newVal <- semExpr expr
+
+                modify (M.insert newLoc newVal)
+
+                let goodType = case (t, newVal) of
+                                (TInt _, VInt _) -> True
+                                (TBool _, VBool _) -> True
+                                _ ->  False
+
+                if not goodType
+                    then
+                        throwError ("wrong argument type" ++ atPosition (getPositionInfo expr))
+                    else
+                        local (\(vEnv, fEnv) -> ((M.insert argName newLoc vEnv), fEnv)) inter
+
+            setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter () -> Interpreter ()
+            setArgsFromExprs zipArgsExprs inter = foldl (flip setArgFromExpr) inter zipArgsExprs
 
 semFDefs :: [FDef PInfo] -> Interpreter () -> Interpreter ()
 semFDefs ds interpreter = foldl (flip semFDef) interpreter ds
@@ -193,4 +228,6 @@ semStmts [] interpreter = interpreter
 semStmts stmts interpreter = foldl (flip semStmt) interpreter stmts
 
 interpret :: Program PInfo -> IO ()
-interpret program@(Prog pi vs fs) = undefined
+interpret program@(Prog _ vs fs) =
+    do
+        return ()
