@@ -8,9 +8,13 @@ Prog.       Program ::= [VDecl] [FDef] ;
 
 -- Definitions & Declarations ---------------------------------------------
 
-Blk.        Block ::= "{" [VDecl] [Stmt] "}" ;
+FBody.      FBody ::= "{" [VDecl] [Stmt] Return "}" ;
 
-DFun.       FDef ::= Type Ident "(" [Arg] ")" Block ;
+RetVal.    	Return ::= "return" Expr ";" ;
+
+RetVoid.    Return ::= "return" ";" ;
+
+DFun.       FDef ::= Type Ident "(" [Arg] ")" FBody ;
 
 separator   nonempty FDef "" ;
 
@@ -40,15 +44,13 @@ TBool.      Type ::= "bool" ;
 
 -- Statements ----------------------------------------------
 
+Blk.        Block ::= "{" [VDecl] [Stmt] "}" ;
+
 SBlock.     Stmt ::= Block ;
 
 SEmpty.     Stmt ::= ";" ;
 
 SAssign.    Stmt ::= Ident "=" Expr  ";" ;
-
-SRetVal.    Stmt ::= "return" Expr ";" ;
-
-SReturn.    Stmt ::= "return" ";" ;
 
 SCond.      Stmt ::= "if" "(" Expr ")" Stmt  ;
 

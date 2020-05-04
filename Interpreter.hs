@@ -168,10 +168,6 @@ semStmt stmt interpreter = do
                 case M.lookup vName env of
                     Nothing -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
                     Just loc -> local (M.insert vName loc) interpreter
-        SRetVal _ expr
-            -> undefined
-        SReturn _
-            -> undefined
         SCond _ expr stmt
             -> do
                 cond <- semBool expr
