@@ -7,6 +7,24 @@ import Control.Monad.Except
 import Control.Monad.Reader
 
 type PInfo = Maybe(Int, Int)
+
+data Var =
+    VInt Integer
+    | VBool Bool
+    | VVoid
+
+data Func = VFunc ([Expr PInfo] -> Interpreter Var)
+
+type Loc = Int
+type VEnv = M.Map Ident Loc
+type FEnv = M.Map Ident Func
+type Env = (VEnv, FEnv)
+type Store = M.Map Loc Var
+
+type XExcept = ExceptT String IO
+type XReader = ReaderT Env XExcept
+type Interpreter = StateT Store XReader
+
 atPosition :: PInfo -> String
 atPosition (Just (x, y)) = " at line " ++ show x ++ " position " ++ show y
 atPosition Nothing = undefined
@@ -31,34 +49,10 @@ alloc = do
     store <- get
     return (if (M.null store) then 1 else fst (M.findMax store))
 
-data Var =
-    VInt Integer
-    | VBool Bool
-    | VVoid
-
-instance Eq Var where
-    (VInt x) == (VInt y) = x == y
-    (VBool x) == (VBool y) = x == y
-    VVoid == VVoid = True
-    _ == _ = False
-
-instance Show Var where
-    show (VInt x) = show x
-    show (VBool x) = show x
-    show VVoid = "()"
-
-type Loc = Int
-type Env = M.Map Ident Loc
-type Store = M.Map Loc Var
-
-type XExcept = ExceptT String IO
-type XReader = ReaderT Env XExcept
-type Interpreter = StateT Store XReader
-
 semInt :: Expr PInfo -> Interpreter Integer
 semInt expr = do
     store <- get
-    env <- ask
+    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VInt x -> return x
@@ -67,7 +61,7 @@ semInt expr = do
 semBool :: Expr PInfo -> Interpreter Bool
 semBool expr = do
     store <- get
-    env <- ask
+    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VBool x -> return x
@@ -76,9 +70,9 @@ semBool expr = do
 semExpr :: Expr PInfo -> Interpreter Var
 semExpr expr = do
     store <- get
-    env <- ask
+    (vEnv, fEnv) <- ask
     case expr of
-        EVar pi vName -> case M.lookup vName env of
+        EVar pi vName -> case M.lookup vName vEnv of
             Nothing -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
             Just loc -> case M.lookup loc store of
                 Nothing -> throwError ("no value @ " ++ show loc ++ atPosition (getPositionInfo expr))
@@ -86,7 +80,10 @@ semExpr expr = do
         ELitInt _ n -> return (VInt n)
         ELitTrue _ -> return (VBool True)
         ELitFalse _ -> return (VBool False)
-        EApp _ _ _ -> undefined
+        EApp pi fName exprs
+            -> case M.lookup fName fEnv of
+                Just (VFunc f) -> f exprs
+                _ -> throwError ("function " ++ show fName ++ "undeclared" ++ atPosition (getPositionInfo expr))
         ENeg _ exp -> do
             val <- semInt exp
             return (VInt (-1 * val))
@@ -145,7 +142,7 @@ semVDecl (DVar _ t i) interpreter = do
                     NoInit _ x -> x
                     Init _ x _ -> x
     modify (M.insert newLoc newVal)
-    local (M.insert vName newLoc) interpreter
+    local (\(vEnv, fEnv) -> ((M.insert vName newLoc vEnv), fEnv)) interpreter
 
 semVDecls :: [VDecl PInfo] -> Interpreter () -> Interpreter ()
 semVDecls ds interpreter = foldl (flip semVDecl) interpreter ds
@@ -153,10 +150,13 @@ semVDecls ds interpreter = foldl (flip semVDecl) interpreter ds
 semFDef :: FDef PInfo -> Interpreter () -> Interpreter ()
 semFDef def interpreter = undefined
 
+semFDefs :: [FDef PInfo] -> Interpreter () -> Interpreter ()
+semFDefs ds interpreter = foldl (flip semFDef) interpreter ds
+
 semStmt :: Stmt PInfo -> Interpreter () -> Interpreter ()
 semStmt stmt interpreter = do
     store <- get
-    env <- ask
+    (vEnv, fEnv) <- ask
     case stmt of
         SEmpty _
             -> interpreter
@@ -165,9 +165,11 @@ semStmt stmt interpreter = do
         SAssign _ vName expr
             -> do
                 val <- semExpr expr
-                case M.lookup vName env of
+                case M.lookup vName vEnv of
                     Nothing -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
-                    Just loc -> local (M.insert vName loc) interpreter
+                    Just loc
+                        -> local (\(vEnv, fEnv) -> ((M.insert vName loc vEnv), fEnv)) interpreter
+
         SCond _ expr stmt
             -> do
                 cond <- semBool expr
