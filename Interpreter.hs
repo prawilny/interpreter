@@ -263,15 +263,19 @@ startEnv = (M.empty, M.fromList [
                 _ -> throwError ("print argument of invalid type " ++ atPosition (getPositionInfo expr))
             ) exprs >> return VVoid
 
-emptyInterpreter :: Interpreter ()
-emptyInterpreter =
+startInterpreter :: Program PInfo -> Interpreter ()
+startInterpreter (Prog _ vDecls fDefs) =
     do
+        modify (const startStore)
+        vdeclEnv <- local (const startEnv) (semVDecls vDecls)
+        fdefEnv <- local (const vdeclEnv) (semFDefs fDefs)
+        local (const fdefEnv) (semExpr (EApp Nothing (Ident "main") []))
         return ()
 
 interpret :: Program PInfo -> XResult ()
 interpret program =
     do
-        runReaderT (execStateT (emptyInterpreter) startStore) startEnv
+        runReaderT (execStateT (startInterpreter program) M.empty) (M.empty, M.empty)
         return ()
 
 runInterpreter :: Program PInfo -> IO ()
@@ -280,4 +284,4 @@ runInterpreter program =
         interpretation <- runExceptT (interpret program)
         case interpretation of
             Left error -> hPutStrLn stderr ("Runtime error: " ++ error)
-            Right _ -> return ()
+            Right io -> return io
