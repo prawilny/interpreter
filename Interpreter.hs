@@ -133,8 +133,9 @@ semExpr expr = do
             val2 <- semBool exp2
             return (VBool (val1 || val2))
 
-semVDecl :: VDecl PInfo -> Interpreter () -> Interpreter ()
-semVDecl (DVar _ t i) interpreter = do
+semVDecl :: VDecl PInfo -> Interpreter Env
+semVDecl (DVar _ t i) = do
+    (vEnv, fEnv) <- ask
     newLoc <- alloc
     newVal <- case i of
                     NoInit _ _ -> defaultValue t
@@ -143,129 +144,140 @@ semVDecl (DVar _ t i) interpreter = do
                     NoInit _ x -> x
                     Init _ x _ -> x
     modify (M.insert newLoc newVal)
-    local (\(vEnv, fEnv) -> ((M.insert vName newLoc vEnv), fEnv)) interpreter
+    return ((M.insert vName newLoc vEnv), fEnv)
 
-semVDecls :: [VDecl PInfo] -> Interpreter () -> Interpreter ()
-semVDecls ds interpreter = foldl (flip semVDecl) interpreter ds
+semVDecls :: [VDecl PInfo] -> Interpreter Env
+semVDecls [] = ask
+semVDecls (d:ds) = do
+                    newEnv <- semVDecl d
+                    local (const newEnv) (semVDecls ds)
 
-semFDef :: FDef PInfo -> Interpreter () -> Interpreter ()
-semFDef (DFun pi t fName args (FBody _ decls stmts ret)) interpreter =
+semFDef :: FDef PInfo -> Interpreter Env
+semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
     do
         (vEnv, fEnv) <- ask
-        let newEnv = (vEnv, fEnv)
-        local (\(vEnv, fEnv) -> (vEnv, (M.insert fName (VFunc f) fEnv))) interpreter
+        return (vEnv, (M.insert fName (VFunc func) fEnv))
         where
-            f :: [Expr PInfo] -> Interpreter Var
-            f exprs =
+            func :: [Expr PInfo] -> Interpreter Var
+            func exprs =
                 do
                     when (length exprs /= length args) (throwError ("function" ++ show fName ++ "called with wrong number of arguments")) -- TODO: position
-                    postStmtsInterpreter <- semStmts stmts (semVDecls decls (setArgsFromExprs (zip args exprs) interpreter))
-                    case ret of
-                        RetVoid _ -> return VVoid
-                        RetVal _ expr -> do
-                                            retval <- semExpr expr
-                                            return retval
 
-            setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter () -> Interpreter ()
-            setArgFromExpr (ArgVal _ t argName, expr) inter = do
-                newLoc <- alloc
-                newVal <- semExpr expr
+                    argEnv <- setArgsFromExprs (zip args exprs)
+                    declEnv <- local (const argEnv) (semVDecls decls)
+                    stmtEnv <- local (const declEnv) (semStmts stmts)
 
-                modify (M.insert newLoc newVal)
+                    local (const stmtEnv) (case ret of
+                                            RetVoid _ -> return VVoid
+                                            RetVal _ expr -> semExpr expr)
 
-                let goodType = case (t, newVal) of
-                                (TInt _, VInt _) -> True
-                                (TBool _, VBool _) -> True
-                                _ ->  False
+            setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter Env
+            setArgFromExpr (ArgVal _ t argName, expr) =
+                do
+                    (vEnv, fEnv) <- ask
+                    newLoc <- alloc
+                    newVal <- semExpr expr
 
-                if not goodType
-                    then
-                        throwError ("wrong argument type" ++ atPosition (getPositionInfo expr))
-                    else
-                        local (\(vEnv, fEnv) -> ((M.insert argName newLoc vEnv), fEnv)) inter
+                    modify (M.insert newLoc newVal)
 
-            setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter () -> Interpreter ()
-            setArgsFromExprs zipArgsExprs inter = foldl (flip setArgFromExpr) inter zipArgsExprs
+                    let goodType = case (t, newVal) of
+                                    (TInt _, VInt _) -> True
+                                    (TBool _, VBool _) -> True
+                                    _ ->  False
 
-semFDefs :: [FDef PInfo] -> Interpreter () -> Interpreter ()
-semFDefs ds interpreter = foldl (flip semFDef) interpreter ds
+                    if not goodType
+                        then
+                            throwError ("wrong argument type" ++ atPosition (getPositionInfo expr))
+                        else
+                            return ((M.insert argName newLoc vEnv), fEnv)
 
-semStmt :: Stmt PInfo -> Interpreter () -> Interpreter ()
-semStmt stmt interpreter = do
+            setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter Env
+            setArgsFromExprs [] = ask
+            setArgsFromExprs (z:zs) = do
+                                        newEnv <- setArgFromExpr z
+                                        local (const newEnv) (setArgsFromExprs zs)
+
+semFDefs :: [FDef PInfo] -> Interpreter Env
+semFDefs [] = ask
+semFDefs (d:ds) = do
+                    newEnv <- semFDef d
+                    local (const newEnv) (semFDefs ds)
+
+semStmt :: Stmt PInfo -> Interpreter Env
+semStmt stmt = do
     store <- get
     (vEnv, fEnv) <- ask
     case stmt of
         SEmpty _
-            -> interpreter
+            -> return (vEnv, fEnv)
         SBlock _ (Blk _ ds stmts)
-            -> semStmts stmts (semVDecls ds interpreter)
+            ->
+                do
+                    vdelcEnv <- semVDecls ds
+                    local (const vdelcEnv) (semStmts stmts)
         SAssign _ vName expr
             -> do
                 val <- semExpr expr
                 case M.lookup vName vEnv of
-                    Nothing -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
+                    Nothing
+                        -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
                     Just loc
-                        -> local (\(vEnv, fEnv) -> ((M.insert vName loc vEnv), fEnv)) interpreter
+                        -> return ((M.insert vName loc vEnv), fEnv)
         SCond _ expr stmt
             -> do
                 cond <- semBool expr
-                if cond then semStmt stmt interpreter else interpreter
+                if cond then semStmt stmt else ask
         SCondElse _ expr (Blk _ dsTrue stmtsTrue) (Blk _ dsFalse stmtsFalse)
             -> do
                 cond <- semBool expr
                 let (ds, stmts) = if cond then (dsTrue, stmtsTrue) else (dsFalse, stmtsFalse)
-                semStmts stmts (semVDecls ds interpreter)
+                vdeclEnv <- semVDecls ds
+                local (const vdeclEnv) (semStmts stmts)
         SWhile _ expr stmt
             -> do
                 cond <- semBool expr
-                if cond then semStmt stmt interpreter else interpreter
+                if cond then semStmt stmt else ask
         SExp _ expr
             -> do
                 _ <- semExpr expr
-                interpreter
+                ask
 
-semStmts :: [Stmt PInfo] -> Interpreter () -> Interpreter ()
--- semStmts stmts = mapM_ semStmt interpreter stmts
-semStmts stmts interpreter = foldl (flip semStmt) interpreter stmts
+semStmts :: [Stmt PInfo] -> Interpreter Env
+semStmts [] = ask
+semStmts (stmt:stmts) = do
+                            newEnv <- semStmt stmt
+                            local (const newEnv) (semStmts stmts)
 
-startInterpreter :: Interpreter ()
-startInterpreter = undefined
+startStore :: Store
+startStore = M.empty
 
-interpret :: Program PInfo -> IO ()
-interpret program@(Prog _ vDecls fDefs) =
+startEnv :: Env
+startEnv = (M.empty, M.fromList [
+    (Ident "printLn", VFunc printFunc)
+    ]) where
+        printFunc :: [Expr PInfo] -> Interpreter Var
+        printFunc exprs = mapM_ (
+            \expr -> semExpr expr >>= \val -> case val of
+                VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
+                VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
+                _ -> throwError ("print argument of invalid type " ++ atPosition (getPositionInfo expr))
+            ) exprs >> return VVoid
+
+emptyInterpreter :: Interpreter ()
+emptyInterpreter =
     do
-        let startStore = M.empty
-        let startEnv = (M.empty, M.fromList [
-                ("printLn", printFunc),
-                ("readInt", readInt),
-                ("readString", readString),
-                ("readBool", readBool)
-                ]) where
-                    printFunc :: [Expr PInfo] -> Interpreter Var
-                    printFunc exprs = mapM_ (
-                        \expr -> semExpr expr >>= \val -> case val of
-                            VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
-                            VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
-                            _ -> throwError ("print argument of invalid type " ++ atPosition (getPositionInfo expr))
-                        ) exprs >> return VVoid
-
-                    readInt :: [Expr PInfo] -> Interpreter Var
-                    readInt = undefined
-
-                    readString :: [Expr PInfo] -> Interpreter Var
-                    readString = undefined
-
-                    readBool :: [Expr PInfo] -> Interpreter Var
-                    readBool = undefined
-
-
         return ()
-        -- result <- runExceptT (runStateT  (runReaderT  (execStmt (SBlock d s)) initEnv) initStore)
-        -- -- result <- runExceptT $ flip runStateT initStore $ flip runReaderT initEnv $ execStmt (SBlock d s)
-        -- let interpreter = semVDecls vDecls (semFDefs fDefs ${Interpreter():initStore:initEnv})
 
-        -- let interpretation = (startInterpreter >> semExpr (EApp Nothing (Ident "main") []))
+interpret :: Program PInfo -> XResult ()
+interpret program =
+    do
+        runReaderT (execStateT (emptyInterpreter) startStore) startEnv
+        return ()
 
-        -- case interpretation of
-        --     Left runtimeErr -> hPutStrLn stderr ("Interpretation error: " ++ runtimeErr)
-        --     Right _ -> return ()
+runInterpreter :: Program PInfo -> IO ()
+runInterpreter program =
+    do
+        interpretation <- runExceptT (interpret program)
+        case interpretation of
+            Left error -> hPutStrLn stderr ("Runtime error: " ++ error)
+            Right _ -> return ()

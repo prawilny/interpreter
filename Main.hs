@@ -13,7 +13,7 @@ import AbsLattePlus
 
 import ErrM
 
-import Interpreter (interpret)
+import Interpreter (runInterpreter)
 
 type ParseFun a = [Token] -> Err a
 
@@ -31,8 +31,7 @@ run p s = let ts = myLLexer s in case p ts of
                         putStrLn s
                         exitFailure
             Ok tree -> do
-                        putStrLn "\nParse Successful!"
-                        interpret tree
+                        runInterpreter tree
                         exitSuccess
 
 usage :: IO ()
@@ -52,8 +51,3 @@ main = do
     ["--help"] -> usage
     [] -> getContents >>= run pProgram
     fs -> mapM_ (runFile pProgram) fs
-
-
-
-
-
