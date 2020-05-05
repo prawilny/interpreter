@@ -13,6 +13,7 @@ type PInfo = Maybe(Int, Int)
 data Var = VVoid
     | VInt Integer
     | VBool Bool
+    | VString String
 
 data Func = VFunc ([Expr PInfo] -> Interpreter Var)
 
@@ -50,6 +51,8 @@ defaultValue t = do
     case t of
         TInt _ -> return (VInt 0)
         TBool _ -> return (VBool False)
+        TString _ -> return (VString "")
+        TVoid _ -> return VVoid
 
 alloc :: Interpreter Loc
 alloc = do
@@ -91,6 +94,7 @@ semExpr expr = do
             -> case M.lookup fName fEnv of
                 Just (VFunc f) -> f exprs
                 _ -> throwError ("function " ++ show fName ++ " not declared" ++ atPosition (getPositionInfo expr))
+        EString _ s -> return (VString s)
         ENeg _ exp -> do
             val <- semInt exp
             return (VInt (-1 * val))
@@ -179,17 +183,30 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                     newVal <- semExpr expr
 
                     modify (M.insert newLoc newVal)
+                    return ((M.insert argName newLoc vEnv), fEnv)
+                    -- let goodType = case (t, newVal) of
+                    --                 (TInt _, VInt _) -> True
+                    --                 (TBool _, VBool _) -> True
+                    --                 (TString _, VString _) -> True
+                    --                 _ ->  False
 
-                    let goodType = case (t, newVal) of
-                                    (TInt _, VInt _) -> True
-                                    (TBool _, VBool _) -> True
-                                    _ ->  False
+                    -- if not goodType
+                    --     then
+                    --         throwError ("wrong argument type" ++ atPosition (getPositionInfo expr))
+                    --     else
+                    --         return ((M.insert argName newLoc vEnv), fEnv)
+            setArgFromExpr (ArgRef _ t argName, expr) =
+                do
+                    (vEnv, fEnv) <- ask
 
-                    if not goodType
-                        then
-                            throwError ("wrong argument type" ++ atPosition (getPositionInfo expr))
-                        else
-                            return ((M.insert argName newLoc vEnv), fEnv)
+                    case expr of
+                        EVar _ vName ->
+                            case M.lookup vName vEnv of
+                                Nothing
+                                    -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
+                                Just loc
+                                    -> return ((M.insert argName loc vEnv), fEnv)
+                        _ -> throwError ("Argument passed by reference is not a variable" ++ atPosition (getPositionInfo expr))
 
             setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter Env
             setArgsFromExprs [] = ask
@@ -260,6 +277,7 @@ startEnv = (M.empty, M.fromList [
             \expr -> semExpr expr >>= \val -> case val of
                 VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
                 VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
+                VString s -> lift $ lift $ lift $ hPutStrLn stdout s
                 _ -> throwError ("print argument of invalid type " ++ atPosition (getPositionInfo expr))
             ) exprs >> return VVoid
 
