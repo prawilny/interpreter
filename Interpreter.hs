@@ -6,6 +6,8 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 
+import System.IO
+
 type PInfo = Maybe(Int, Int)
 
 data Var = VVoid
@@ -20,8 +22,8 @@ type FEnv = M.Map Ident Func
 type Env = (VEnv, FEnv)
 type Store = M.Map Loc Var
 
-type XExcept = ExceptT String IO
-type XReader = ReaderT Env XExcept
+type XResult = ExceptT String IO
+type XReader = ReaderT Env XResult
 type Interpreter = StateT Store XReader
 
 atPosition :: PInfo -> String
@@ -204,7 +206,6 @@ semStmt stmt interpreter = do
                     Nothing -> throwError ("variable " ++ show vName ++ " not declared" ++ atPosition (getPositionInfo expr))
                     Just loc
                         -> local (\(vEnv, fEnv) -> ((M.insert vName loc vEnv), fEnv)) interpreter
-
         SCond _ expr stmt
             -> do
                 cond <- semBool expr
@@ -224,10 +225,47 @@ semStmt stmt interpreter = do
                 interpreter
 
 semStmts :: [Stmt PInfo] -> Interpreter () -> Interpreter ()
-semStmts [] interpreter = interpreter
+-- semStmts stmts = mapM_ semStmt interpreter stmts
 semStmts stmts interpreter = foldl (flip semStmt) interpreter stmts
 
+startInterpreter :: Interpreter ()
+startInterpreter = undefined
+
 interpret :: Program PInfo -> IO ()
-interpret program@(Prog _ vs fs) =
+interpret program@(Prog _ vDecls fDefs) =
     do
+        let startStore = M.empty
+        let startEnv = (M.empty, M.fromList [
+                ("printLn", printFunc),
+                ("readInt", readInt),
+                ("readString", readString),
+                ("readBool", readBool)
+                ]) where
+                    printFunc :: [Expr PInfo] -> Interpreter Var
+                    printFunc exprs = mapM_ (
+                        \expr -> semExpr expr >>= \val -> case val of
+                            VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
+                            VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
+                            _ -> throwError ("print argument of invalid type " ++ atPosition (getPositionInfo expr))
+                        ) exprs >> return VVoid
+
+                    readInt :: [Expr PInfo] -> Interpreter Var
+                    readInt = undefined
+
+                    readString :: [Expr PInfo] -> Interpreter Var
+                    readString = undefined
+
+                    readBool :: [Expr PInfo] -> Interpreter Var
+                    readBool = undefined
+
+
         return ()
+        -- result <- runExceptT (runStateT  (runReaderT  (execStmt (SBlock d s)) initEnv) initStore)
+        -- -- result <- runExceptT $ flip runStateT initStore $ flip runReaderT initEnv $ execStmt (SBlock d s)
+        -- let interpreter = semVDecls vDecls (semFDefs fDefs ${Interpreter():initStore:initEnv})
+
+        -- let interpretation = (startInterpreter >> semExpr (EApp Nothing (Ident "main") []))
+
+        -- case interpretation of
+        --     Left runtimeErr -> hPutStrLn stderr ("Interpretation error: " ++ runtimeErr)
+        --     Right _ -> return ()
