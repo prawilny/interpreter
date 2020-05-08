@@ -20,7 +20,7 @@ data Func = VFunc ([Expr PInfo] -> Interpreter Var)
 type Loc = Int
 type VEnv = M.Map Ident Loc
 type FEnv = M.Map Ident Func
-data Env = Env (VEnv, FEnv)
+type Env = (VEnv, FEnv)
 type Store = M.Map Loc Var
 
 type XResult = ExceptT String IO
@@ -63,7 +63,7 @@ alloc = do
 semInt :: Expr PInfo -> Interpreter Integer
 semInt expr = do
     store <- get
-    Env (vEnv, fEnv) <- ask
+    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VInt x -> return x
@@ -72,7 +72,7 @@ semInt expr = do
 semBool :: Expr PInfo -> Interpreter Bool
 semBool expr = do
     store <- get
-    Env (vEnv, fEnv) <- ask
+    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VBool x -> return x
@@ -81,7 +81,7 @@ semBool expr = do
 semExpr :: Expr PInfo -> Interpreter Var
 semExpr expr = do
     store <- get
-    Env (vEnv, fEnv) <- ask
+    (vEnv, fEnv) <- ask
     case expr of
         EVar pi vName -> case M.lookup vName vEnv of
             Nothing -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
@@ -139,7 +139,7 @@ semExpr expr = do
 
 semVDecl :: VDecl PInfo -> Interpreter Env
 semVDecl (DVar _ t i) = do
-    Env (vEnv, fEnv) <- ask
+    (vEnv, fEnv) <- ask
     newLoc <- alloc
     newVal <- case i of
             NoInit _ _ -> defaultValue t
@@ -148,7 +148,7 @@ semVDecl (DVar _ t i) = do
             NoInit _ x -> x
             Init _ x _ -> x
     modify (M.insert newLoc newVal)
-    return (Env ((M.insert vName newLoc vEnv), fEnv))
+    return ((M.insert vName newLoc vEnv), fEnv)
 
 semVDecls :: [VDecl PInfo] -> Interpreter Env
 semVDecls [] = ask
@@ -159,8 +159,8 @@ semVDecls (d:ds) = do
 semFDef :: FDef PInfo -> Interpreter Env
 semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
     do
-        Env (vEnv, fEnv) <- ask
-        let newEnv = Env (vEnv, (M.insert fName (VFunc (func newEnv)) fEnv))
+        (vEnv, fEnv) <- ask
+        let newEnv = (vEnv, (M.insert fName (VFunc (func newEnv)) fEnv))
         return newEnv
         where
             func :: Env -> [Expr PInfo] -> Interpreter Var
@@ -171,7 +171,7 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
 
                     argEnv <- local (const env) (setArgsFromExprs (zip args exprs))
                     declEnv <- local (const argEnv) (semVDecls decls)
-                    semStmts stmts
+                    local (const declEnv) (semStmts stmts)
 
                     local (const declEnv) (case ret of
                                             RetVoid _ -> return VVoid
@@ -180,15 +180,15 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
             setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter Env
             setArgFromExpr (ArgVal _ t argName, expr) =
                 do
-                    Env (vEnv, fEnv) <- ask
+                    (vEnv, fEnv) <- ask
                     newLoc <- alloc
                     newVal <- semExpr expr
 
                     modify (M.insert newLoc newVal)
-                    return (Env ((M.insert argName newLoc vEnv), fEnv))
+                    return ((M.insert argName newLoc vEnv), fEnv)
             setArgFromExpr (ArgRef _ t argName, expr) =
                 do
-                    Env (vEnv, fEnv) <- ask
+                    (vEnv, fEnv) <- ask
 
                     case expr of
                         EVar _ vName ->
@@ -196,7 +196,7 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                                 Nothing
                                     -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
                                 Just loc
-                                    -> return (Env ((M.insert argName loc vEnv), fEnv))
+                                    -> return ((M.insert argName loc vEnv), fEnv)
                         _ -> throwError (atPosition (getPosition expr) ++ "Argument passed by reference is not a variable")
 
             setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter Env
@@ -214,7 +214,7 @@ semFDefs (d:ds) = do
 semStmt :: Stmt PInfo -> Interpreter ()
 semStmt stmt = do
     store <- get
-    Env (vEnv, fEnv) <- ask
+    (vEnv, fEnv) <- ask
     case stmt of
         SEmpty _ -> return ()
         SBlock _ (Blk _ ds stmts) -> do
@@ -252,7 +252,7 @@ startStore :: Store
 startStore = M.empty
 
 startEnv :: Env
-startEnv = Env (M.empty, M.fromList [(Ident "print", VFunc printFunc)])
+startEnv = (M.empty, M.fromList [(Ident "print", VFunc printFunc)])
     where
         printFunc :: [Expr PInfo] -> Interpreter Var
         printFunc exprs = mapM_ (
@@ -268,15 +268,13 @@ startInterpreter (Prog _ vDecls fDefs) = do
     modify (const startStore)
     vdeclEnv <- local (const startEnv) (semVDecls vDecls)
     fdefEnv <- local (const vdeclEnv) (semFDefs fDefs)
-    when (M.notMember (Ident "main") (envSnd fdefEnv)) (throwError "main() undeclared")
+    when (M.notMember (Ident "main") (snd fdefEnv)) (throwError "main() undeclared")
     local (const fdefEnv) (semExpr (EApp Nothing (Ident "main") []))
     return ()
-        where envSnd (Env (vEnv, fEnv)) = fEnv
-
 
 interpret :: Program PInfo -> XResult ()
 interpret program = do
-    runReaderT (execStateT (startInterpreter program) M.empty) (Env (M.empty, M.empty))
+    runReaderT (execStateT (startInterpreter program) M.empty) (M.empty, M.empty)
     return ()
 
 runInterpreter :: Program PInfo -> IO ()
