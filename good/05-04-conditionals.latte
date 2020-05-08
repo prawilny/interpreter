@@ -1,0 +1,24 @@
+void f(int arg){
+	if (arg < 0) {
+		print("-");
+	} else {
+		if (arg > 0)
+			print("+");
+	}
+	if(arg < 0)
+		arg = -arg;
+
+	while (arg > 0){
+		print(arg);
+		arg = arg - 1;
+	}
+	return;
+}
+
+int main(){
+	f(2);
+	f(-2);
+	f(0);
+
+	return 0;
+}

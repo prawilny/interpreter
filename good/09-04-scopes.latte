@@ -1,0 +1,25 @@
+int x = 1;
+
+void f() {
+	int x = 2;
+	print(x);
+	return;
+}
+
+void g(int x) {
+	print(x);
+	return;
+}
+
+int main() {
+	int x_global = x;
+	int x = 3;
+	int x_local = x;
+
+	print(x_global);
+	f();
+	print(x_local);
+	g(4);
+
+	return 0;
+}

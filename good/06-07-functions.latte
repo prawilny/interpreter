@@ -1,0 +1,27 @@
+void fact(int n, int &x){
+	if (n > 1){
+		x = x * n;
+		fact(n - 1, x);
+	}
+	return;
+}
+
+int fib(int n){
+	int retval;
+	if (n <= 1){
+		retval = n;
+	} else {
+		retval = fib(n - 1) * fib(n - 2);
+	}
+	print(retval);
+	return retval;
+}
+
+int main(){
+	int fact = 1;
+	fact(5, fact);
+	print(fact);
+	print(fib(6));
+
+	return 0;
+}
