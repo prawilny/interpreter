@@ -13,14 +13,14 @@ int fib(int n){
 	} else {
 		retval = fib(n - 1) * fib(n - 2);
 	}
-	print(retval);
+
 	return retval;
 }
 
 int main(){
-	int fact = 1;
-	fact(5, fact);
-	print(fact);
+	int fac = 1;
+	fact(5, fac);
+	print(fac);
 	print(fib(6));
 
 	return 0;
