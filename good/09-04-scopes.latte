@@ -19,7 +19,11 @@ int main() {
 	print(x_global);
 	f();
 	print(x_local);
-	g(4);
+	{
+		int x = 4;
+		print(x);
+	}
+	g(x);
 
 	return 0;
 }

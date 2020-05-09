@@ -164,12 +164,13 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
         return newEnv
         where
             func :: Env -> [Expr PInfo] -> Interpreter Var
-            func env exprs =
+            func funcEnv exprs =
                 do
-                    -- TODO: position
                     when (length exprs /= length args) (throwError ("function" ++ show fName ++ "called with wrong number of arguments"))
 
-                    argEnv <- local (const env) (setArgsFromExprs (zip args exprs))
+                    callEnv <- ask
+                    args <- local (const callEnv) (setArgsFromExprs (zip args exprs))
+                    argEnv <- local (const funcEnv) (setEnvFromArgs args)
                     declEnv <- local (const argEnv) (semVDecls decls)
                     local (const declEnv) (semStmts stmts)
 
@@ -177,33 +178,41 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                                             RetVoid _ -> return VVoid
                                             RetVal _ expr -> semExpr expr)
 
-            setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter Env
-            setArgFromExpr (ArgVal _ t argName, expr) =
-                do
-                    (vEnv, fEnv) <- ask
-                    newLoc <- alloc
-                    newVal <- semExpr expr
+            setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter (Arg PInfo, Either Loc Var)
+            setArgFromExpr (ArgVal pi t argName, expr) = do
+                env <- ask
+                val <- semExpr expr
+                return (ArgVal pi t argName, Right val)
+            setArgFromExpr (ArgRef pi t argName, expr) = do
+                (vEnv, fEnv) <- ask
+                case expr of
+                    EVar _ vName -> case M.lookup vName vEnv of
+                        Nothing -> throwError "variable not declared"
+                        Just loc -> return (ArgRef pi t argName, Left loc)
+                    _ -> throwError "reference argument given a value"
 
-                    modify (M.insert newLoc newVal)
-                    return ((M.insert argName newLoc vEnv), fEnv)
-            setArgFromExpr (ArgRef _ t argName, expr) =
-                do
-                    (vEnv, fEnv) <- ask
-
-                    case expr of
-                        EVar _ vName ->
-                            case M.lookup vName vEnv of
-                                Nothing
-                                    -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
-                                Just loc
-                                    -> return ((M.insert argName loc vEnv), fEnv)
-                        _ -> throwError (atPosition (getPosition expr) ++ "Argument passed by reference is not a variable")
-
-            setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter Env
-            setArgsFromExprs [] = ask
+            setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter [(Arg PInfo, Either Loc Var)]
+            setArgsFromExprs [] = return []
             setArgsFromExprs (z:zs) = do
-                                        newEnv <- setArgFromExpr z
-                                        local (const newEnv) (setArgsFromExprs zs)
+                pair <- setArgFromExpr z
+                pairs <- setArgsFromExprs zs
+                return (pair : pairs)
+
+            setEnvFromArg :: (Arg PInfo, Either Loc Var) -> Interpreter Env
+            setEnvFromArg (ArgVal _ _ argName, Right val) = do
+                (vEnv, fEnv) <- ask
+                newLoc <- alloc
+                modify (M.insert newLoc val)
+                return ((M.insert argName newLoc vEnv), fEnv)
+            setEnvFromArg (ArgRef _ _ argName, Left loc) = do
+                (vEnv, fEnv) <- ask
+                return ((M.insert argName loc vEnv), fEnv)
+
+            setEnvFromArgs :: [(Arg PInfo, Either Loc Var)] -> Interpreter Env
+            setEnvFromArgs [] = ask
+            setEnvFromArgs (z:zs) = do
+                newEnv <- setEnvFromArg z
+                local (const newEnv) (setEnvFromArgs zs)
 
 semFDefs :: [FDef PInfo] -> Interpreter Env
 semFDefs [] = ask

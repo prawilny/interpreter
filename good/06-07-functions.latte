@@ -11,7 +11,7 @@ int fib(int n){
 	if (n <= 1){
 		retval = n;
 	} else {
-		retval = fib(n - 1) * fib(n - 2);
+		retval = fib(n - 1) + fib(n - 2);
 	}
 
 	return retval;
@@ -19,9 +19,11 @@ int fib(int n){
 
 int main(){
 	int fac = 1;
-	fact(5, fac);
+
+	print(fib(13));
+
+	fact(6, fac);
 	print(fac);
-	print(fib(6));
 
 	return 0;
 }
