@@ -7,13 +7,12 @@ int main(){
 	bool b = t || f;
 	string s = "xD";
 
-	print(x, 0);
-	print(y, 1);
-	print(z, 0);
-	print(t, true);
-	print(f, false);
-	print(b, true);
-	print(s, "xD");
+	assert (x == 0, "x");
+	assert (y == 1, "y");
+	assert (z == 0, "z");
+	assert (t, "t");
+	assert (!f, "f");
+	assert (b, "b");
 
 	return 0;
 }

@@ -1,0 +1,24 @@
+int main(){
+	assert(2 + 3 == 5, "math doesn't work");
+	assert(2 - 3 == -1, "math doesn't work");
+	assert(2 * 3 == 6, "math doesn't work");
+	assert(8 / 3 == 2, "math doesn't work");
+	assert(-(5) % 3 == 1, "math doesn't work");
+	assert(3 + 3 / 3 == 4, "math doesn't work");
+	assert((3 + 3) / 3 == 2, "math doesn't work");
+	assert(-1 == -1 * 1, "math doesn't work");
+	
+	assert(true && true, "logic doesn't work");
+	assert(!false && true, "logic doesn't work");
+	assert(true || false, "logic doesn't work");
+	assert(false || !false, "logic doesn't work");
+	assert((true && false) || false || true, "logic doesn't work");
+	assert(0 <= 0, "logic doesn't work");
+	assert(3 == 9 / 3, true, "logic doesn't work");
+	assert(!(7 < 5), "logic doesn't work");
+	assert(!(3 != 9 / 3), "logic doesn't work");
+	assert(!false, "logic doesn't work");
+	assert(true && false || true, "logic doesn't work"); // 'true' because "||" has higher priority than "&&"
+
+	return 0;
+}

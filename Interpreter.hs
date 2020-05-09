@@ -76,6 +76,13 @@ semBool expr = do
         VBool x -> return x
         _ -> throwError (atPosition (getPosition expr) ++ "bool expected")
 
+semString :: Expr PInfo -> Interpreter String
+semString expr = do
+    val <- semExpr expr
+    case val of
+        VString x -> return x
+        _ -> throwError (atPosition (getPosition expr) ++ "string expected")
+
 semExpr :: Expr PInfo -> Interpreter Var
 semExpr expr = do
     store <- get
@@ -259,17 +266,46 @@ startStore :: Store
 startStore = M.empty
 
 startEnv :: Env
-startEnv = (M.empty, M.empty)
--- startEnv = (M.empty, M.fromList [(Ident "print", VFunc printFunc)])
---     where
---         printFunc :: [Expr PInfo] -> Interpreter Var
---         printFunc exprs = mapM_ (
---             \expr -> semExpr expr >>= \val -> case val of
---                 VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
---                 VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
---                 VString s -> lift $ lift $ lift $ hPutStrLn stdout s
---                 _ -> throwError (atPosition (getPosition expr) ++ "print argument of invalid type")
---             ) exprs >> return VVoid
+startEnv = (M.empty, M.fromList [(Ident "printString", VFunc printString),
+                                    (Ident "printInt", VFunc printInt),
+                                    (Ident "printBool", VFunc printBool),
+                                    (Ident "assert", VFunc assertFunc),
+                                    (Ident "concat", VFunc concatFunc)])
+    where
+        printString :: [Expr PInfo] -> Interpreter Var
+        printString [expr] = semExpr expr >>= \val -> case val of
+            VString s -> lift $ lift $ lift $ hPutStrLn stdout s >> return VVoid
+            _ -> throwError "TC"
+        printString _ = throwError "TC"
+
+        printInt :: [Expr PInfo] -> Interpreter Var
+        printInt [expr] = semExpr expr >>= \val -> case val of
+            VInt n -> lift $ lift $ lift $ hPutStrLn stdout (show n) >> return VVoid
+            _ -> throwError "TC"
+        printInt _ = throwError "TC"
+
+        printBool :: [Expr PInfo] -> Interpreter Var
+        printBool [expr] = semExpr expr >>= \val -> case val of
+            VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b) >> return VVoid
+            _ -> throwError "TC"
+        printBool _ = throwError "TC"
+
+        assertFunc :: [Expr PInfo] -> Interpreter Var
+        assertFunc [boolExpr, errorExpr] = do
+            val <- semBool boolExpr
+            msg <- semString errorExpr
+            if val then
+                return VVoid
+            else
+                throwError ("assert failed: " ++ msg)
+        assertFunc _ = throwError "TC"
+
+        concatFunc :: [Expr PInfo] -> Interpreter Var
+        concatFunc [expr1, expr2] = do
+            str1 <- semString expr1
+            str2 <- semString expr2
+            return (VString (str1 ++ str2))
+        concatFunc _ = throwError "TC"
 
 startInterpreter :: Program PInfo -> Interpreter ()
 startInterpreter (Prog _ vDecls fDefs) = do

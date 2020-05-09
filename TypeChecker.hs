@@ -264,7 +264,11 @@ startStore :: Store
 startStore = M.empty
 
 startEnv :: Env
-startEnv = (M.empty, M.empty)
+startEnv = (M.empty, M.fromList [(Ident "printString", TCFunc [TCArgVal TCString] TCVoid),
+                                    (Ident "printInt", TCFunc [TCArgVal TCInt] TCVoid),
+                                    (Ident "printBool", TCFunc [TCArgVal TCBool] TCVoid),
+                                    (Ident "assert", TCFunc [TCArgVal TCBool, TCArgVal TCString] TCVoid),
+                                    (Ident "concat", TCFunc [TCArgVal TCString, TCArgVal TCString] TCString)])
 
 startTC :: Program PInfo -> TC ()
 startTC (Prog _ vDecls fDefs) = do

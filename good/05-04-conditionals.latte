@@ -1,22 +1,23 @@
 void f(int arg){
 	if (arg < 0) {
-		print("-");
+		printString("-\n");
 	} else {
 		if (arg > 0)
-			print("+");
+			printString("+\n");
 	}
 	if(arg < 0)
 		arg = -arg;
 
 	while (arg > 0){
-		print(arg);
+		printInt(arg);
+		printString("\n")
 		arg = arg - 1;
 	}
 	return;
 }
 
 int main(){
-	f(2);
+	f(7);
 	f(-2);
 	f(0);
 

@@ -2,12 +2,12 @@ int x = 1;
 
 void f() {
 	int x = 2;
-	print(x);
+	printInt(x);
 	return;
 }
 
 void g(int x) {
-	print(x);
+	printInt(x);
 	return;
 }
 
@@ -16,12 +16,12 @@ int main() {
 	int x = 3;
 	int x_local = x;
 
-	print(x_global);
+	printInt(x_global);
 	f();
-	print(x_local);
+	printInt(x_local);
 	{
 		int x = 4;
-		print(x);
+		printInt(x);
 	}
 	g(x);
 
