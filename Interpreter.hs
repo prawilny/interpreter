@@ -8,6 +8,8 @@ import Control.Monad.Reader
 
 import System.IO
 
+import TypeChecker(checkTypes)
+
 type PInfo = Maybe(Int, Int)
 
 data Var = VVoid
@@ -62,8 +64,6 @@ alloc = do
 
 semInt :: Expr PInfo -> Interpreter Integer
 semInt expr = do
-    store <- get
-    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VInt x -> return x
@@ -71,8 +71,6 @@ semInt expr = do
 
 semBool :: Expr PInfo -> Interpreter Bool
 semBool expr = do
-    store <- get
-    (vEnv, fEnv) <- ask
     val <- semExpr expr
     case val of
         VBool x -> return x
@@ -261,16 +259,17 @@ startStore :: Store
 startStore = M.empty
 
 startEnv :: Env
-startEnv = (M.empty, M.fromList [(Ident "print", VFunc printFunc)])
-    where
-        printFunc :: [Expr PInfo] -> Interpreter Var
-        printFunc exprs = mapM_ (
-            \expr -> semExpr expr >>= \val -> case val of
-                VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
-                VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
-                VString s -> lift $ lift $ lift $ hPutStrLn stdout s
-                _ -> throwError (atPosition (getPosition expr) ++ "print argument of invalid type")
-            ) exprs >> return VVoid
+startEnv = (M.empty, M.empty)
+-- startEnv = (M.empty, M.fromList [(Ident "print", VFunc printFunc)])
+--     where
+--         printFunc :: [Expr PInfo] -> Interpreter Var
+--         printFunc exprs = mapM_ (
+--             \expr -> semExpr expr >>= \val -> case val of
+--                 VInt v -> lift $ lift $ lift $ hPutStrLn stdout (show v)
+--                 VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b)
+--                 VString s -> lift $ lift $ lift $ hPutStrLn stdout s
+--                 _ -> throwError (atPosition (getPosition expr) ++ "print argument of invalid type")
+--             ) exprs >> return VVoid
 
 startInterpreter :: Program PInfo -> Interpreter ()
 startInterpreter (Prog _ vDecls fDefs) = do
@@ -288,7 +287,11 @@ interpret program = do
 
 runInterpreter :: Program PInfo -> IO ()
 runInterpreter program = do
-    interpretation <- runExceptT (interpret program)
-    case interpretation of
-        Left error -> hPutStrLn stderr ("Runtime error: " ++ error)
-        Right io -> return io
+    check <- runExceptT (checkTypes program)
+    case check of
+        Left error -> hPutStrLn stderr ("Typecheck error: " ++ error)
+        Right _ -> do
+            interpretation <- runExceptT (interpret program)
+            case interpretation of
+                Left error -> hPutStrLn stderr ("Runtime error: " ++ error)
+                Right io -> return io
