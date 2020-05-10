@@ -19,7 +19,7 @@ int main(){
 	assert(!(7 < 5), "logic doesn't work");
 	assert(!(3 != 9 / 3), "logic doesn't work");
 	assert(!false, "logic doesn't work");
-	assert(true && false || true, "logic doesn't work"); // 'true' because "||" has higher priority than "&&"
+	assert(false && true || true, "logic doesn't work");
 
 	return 0;
 }
