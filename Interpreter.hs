@@ -35,17 +35,16 @@ errorMsg :: String
 errorMsg = "checkTypes() should've detected this"
 
 defaultValue :: Type PInfo -> Interpreter Var
-defaultValue t = do
-    case t of
-        TInt _ -> return (VInt 0)
-        TBool _ -> return (VBool False)
-        TString _ -> return (VString "")
-        TVoid _ -> return VVoid
+defaultValue t = case t of
+    TInt _ -> return (VInt 0)
+    TBool _ -> return (VBool False)
+    TString _ -> return (VString "")
+    TVoid _ -> return VVoid
 
 alloc :: Interpreter Loc
 alloc = do
     store <- get
-    return (if (M.null store) then 1 else (fst (M.findMax store) + 1))
+    return (if M.null store then 1 else fst (M.findMax store) + 1)
 
 semInt :: Expr PInfo -> Interpreter Integer
 semInt expr = do
@@ -138,7 +137,7 @@ semVDecl (DVar _ t i) = do
             NoInit _ x -> x
             Init _ x _ -> x
     modify (M.insert newLoc newVal)
-    return ((M.insert vName newLoc vEnv), fEnv)
+    return (M.insert vName newLoc vEnv, fEnv)
 
 semVDecls :: [VDecl PInfo] -> Interpreter Env
 semVDecls [] = ask
@@ -150,7 +149,7 @@ semFDef :: FDef PInfo -> Interpreter Env
 semFDef (DFun _ t fName args (FBody _ decls stmts ret)) =
     do
         (vEnv, fEnv) <- ask
-        let newEnv = (vEnv, (M.insert fName (VFunc (func newEnv)) fEnv))
+        let newEnv = (vEnv, M.insert fName (VFunc (func newEnv)) fEnv)
         return newEnv
         where
             func :: Env -> [Expr PInfo] -> Interpreter Var
@@ -193,10 +192,10 @@ semFDef (DFun _ t fName args (FBody _ decls stmts ret)) =
                 (vEnv, fEnv) <- ask
                 newLoc <- alloc
                 modify (M.insert newLoc val)
-                return ((M.insert argName newLoc vEnv), fEnv)
+                return (M.insert argName newLoc vEnv, fEnv)
             setEnvFromArg (ArgRef _ _ argName, Left loc) = do
                 (vEnv, fEnv) <- ask
-                return ((M.insert argName loc vEnv), fEnv)
+                return (M.insert argName loc vEnv, fEnv)
 
             setEnvFromArgs :: [(Arg PInfo, Either Loc Var)] -> Interpreter Env
             setEnvFromArgs [] = ask
@@ -262,19 +261,19 @@ startEnv = (M.empty, M.fromList [(Ident "printString", VFunc printString),
     where
         printString :: [Expr PInfo] -> Interpreter Var
         printString [expr] = semExpr expr >>= \val -> case val of
-            VString s -> lift $ lift $ lift $ hPutStrLn stdout s >> return VVoid
+            VString s -> lift $ lift $ lift $ putStrLn s >> return VVoid
             _ -> throwError errorMsg
         printString _ = throwError errorMsg
 
         printInt :: [Expr PInfo] -> Interpreter Var
         printInt [expr] = semExpr expr >>= \val -> case val of
-            VInt n -> lift $ lift $ lift $ hPutStrLn stdout (show n) >> return VVoid
+            VInt n -> lift $ lift $ lift $ putStrLn (show n) >> return VVoid
             _ -> throwError errorMsg
         printInt _ = throwError errorMsg
 
         printBool :: [Expr PInfo] -> Interpreter Var
         printBool [expr] = semExpr expr >>= \val -> case val of
-            VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b) >> return VVoid
+            VBool b -> lift $ lift $ lift $ putStrLn (show b) >> return VVoid
             _ -> throwError errorMsg
         printBool _ = throwError errorMsg
 

@@ -54,12 +54,12 @@ toTCType t = case t of
 alloc :: TC Loc
 alloc = do
     store <- get
-    return (if (M.null store) then 1 else (fst (M.findMax store) + 1))
+    return (if M.null store then 1 else fst (M.findMax store) + 1)
 
 enforce :: TCType -> Expr PInfo -> TC TCType
 enforce expected expr = do
     got <- checkExpr expr
-    if (expected == got) then
+    if expected == got then
         return got
     else
         throwError (atPosition (getPosition expr) ++ show expected ++ " expected, got " ++ show got)
@@ -81,7 +81,7 @@ checkExpr expr = do
         ELitFalse _ -> return TCBool
         EApp pi fName@(Ident fNameString) exprs -> case M.lookup fName fEnv of
             Just (TCFunc args retType) -> do
-                if (length args /= length exprs) then
+                if length args /= length exprs then
                     throwError (atPosition pi ++ "function " ++ fNameString
                         ++ " called with bad number of arguments")
                 else
@@ -97,7 +97,7 @@ checkExpr expr = do
                                         Nothing -> throwError (atPosition pi
                                             ++ "argument passed by reference is not a variable")
                                         Just loc -> case M.lookup loc store of
-                                            Just gotType -> if (gotType == expectedType) then
+                                            Just gotType -> if gotType == expectedType then
                                                                 return ()
                                                             else
                                                                 throwError (atPosition pi
@@ -105,12 +105,12 @@ checkExpr expr = do
                                                                     ++ ", got &" ++ show gotType)
                                             Nothing -> throwError (atPosition (getPosition expr)
                                                 ++ "TypeChecker internal error - reference to empty location")
-                                checkArg (TCArgRef _, expr) = do
+                                checkArg (TCArgRef _, expr) =
                                     throwError (atPosition (getPosition expr)
                                         ++ "non-variable passed by reference")
                                 checkArg (TCArgVal expectedType, expr) = do
                                     gotType <- checkExpr expr
-                                    if (gotType == expectedType) then
+                                    if gotType == expectedType then
                                         return ()
                                     else
                                         throwError (atPosition (getPosition expr)
@@ -138,7 +138,7 @@ checkVDecl (DVar _ t i) = do
         Init pi _ expr -> do
             gotType <- checkExpr expr
             let expectedType = toTCType t
-            if (gotType == expectedType) then
+            if gotType == expectedType then
                 return gotType
             else
                 throwError (atPosition pi
@@ -147,7 +147,7 @@ checkVDecl (DVar _ t i) = do
             NoInit _ x -> x
             Init _ x _ -> x
     modify (M.insert newLoc newVal)
-    return ((M.insert vName newLoc vEnv), fEnv)
+    return (M.insert vName newLoc vEnv, fEnv)
 
 checkVDecls :: [VDecl PInfo] -> TC Env
 checkVDecls [] = ask
@@ -164,9 +164,9 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                         ArgRef _ t _ -> TCArgRef (toTCType t)
                         ) args
         let expectedType = toTCType t
-        let newEnv = (vEnv, (M.insert fName (TCFunc tcArgs (toTCType t)) fEnv))
+        let newEnv = (vEnv, M.insert fName (TCFunc tcArgs (toTCType t)) fEnv)
         gotType <- func newEnv
-        if (gotType == expectedType) then
+        if gotType == expectedType then
             return newEnv
         else
             throwError (atPosition pi ++ show expectedType ++ " return type expected, got " ++ show gotType)
@@ -186,7 +186,7 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                 (vEnv, fEnv) <- ask
                 newLoc <- alloc
                 modify (M.insert newLoc (toTCType t))
-                return ((M.insert argName newLoc vEnv), fEnv)
+                return (M.insert argName newLoc vEnv, fEnv)
 
             setEnvFromArg :: Arg PInfo -> TC Env
             setEnvFromArg (ArgVal _ t argName) = setEnvFromAnyArg t argName
