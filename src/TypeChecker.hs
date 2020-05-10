@@ -83,7 +83,7 @@ checkExpr expr = do
             Just (TCFunc args retType) -> do
                 if length args /= length exprs then
                     throwError (atPosition pi ++ "function " ++ fNameString
-                        ++ " called with bad number of arguments")
+                        ++ " called with wrong number of arguments")
                 else
                     do
                         _ <- checkArgs (zip args exprs)
