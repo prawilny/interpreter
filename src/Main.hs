@@ -44,5 +44,5 @@ main = do
   case args of
     ["--help"] -> usage
     [] -> getContents >>= run pProgram
-    [f] -> mapM_ (runFile pProgram) [f]
+    [f] -> runFile pProgram f
     _ -> putStrLn "Too many arguments" >> exitFailure
