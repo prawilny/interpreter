@@ -9,7 +9,7 @@ import AbsLattePlus
 
 import ErrM
 
-import Interpreter (runInterpreter)
+import Interpreter ( runInterpreter )
 
 type ParseFun a = [Token] -> Err a
 

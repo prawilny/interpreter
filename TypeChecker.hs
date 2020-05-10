@@ -1,14 +1,16 @@
 module TypeChecker where
 
 import AbsLattePlus
-import qualified Data.Map as M
+
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 
+import qualified Data.Map as M
+
 import System.IO
 
-type PInfo = Maybe(Int, Int)
+import Utils ( atPosition, getPosition, PInfo )
 
 data TCType = TCVoid
     | TCInt
@@ -41,26 +43,6 @@ type Store = M.Map Loc TCType
 type TCResult = ExceptT String IO
 type TCReader = ReaderT Env TCResult
 type TC = StateT Store TCReader
-
-atPosition :: PInfo -> String
-atPosition (Just (line, column)) = show line ++ ":" ++ show column ++ ": "
-atPosition Nothing = ": "
-
-getPosition :: Expr PInfo -> PInfo
-getPosition exp = case exp of
-    EVar pi _ -> pi
-    ELitInt pi _ -> pi
-    ELitTrue pi -> pi
-    ELitFalse pi -> pi
-    EApp pi _ _ -> pi
-    EString pi _ -> pi
-    ENeg pi _ -> pi
-    ENot pi _ -> pi
-    EMul pi _ _ _ -> pi
-    EAdd pi _ _ _ -> pi
-    ECmp pi _ _ _ -> pi
-    EAnd pi _ _ -> pi
-    EOr pi _ _ -> pi
 
 toTCType :: Type PInfo -> TCType
 toTCType t = case t of

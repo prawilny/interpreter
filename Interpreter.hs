@@ -1,16 +1,18 @@
 module Interpreter where
 
 import AbsLattePlus
-import qualified Data.Map as M
+
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 
+import qualified Data.Map as M
+
 import System.IO
 
-import TypeChecker(checkTypes)
+import TypeChecker ( checkTypes )
 
-type PInfo = Maybe(Int, Int)
+import Utils ( atPosition, getPosition, PInfo )
 
 data Var = VVoid
     | VInt Integer
@@ -29,25 +31,8 @@ type XResult = ExceptT String IO
 type XReader = ReaderT Env XResult
 type Interpreter = StateT Store XReader
 
-atPosition :: PInfo -> String
-atPosition (Just (line, column)) = show line ++ ":" ++ show column ++ ": "
-atPosition Nothing = ": "
-
-getPosition :: Expr PInfo -> PInfo
-getPosition exp = case exp of
-    EVar pi _ -> pi
-    ELitInt pi _ -> pi
-    ELitTrue pi -> pi
-    ELitFalse pi -> pi
-    EApp pi _ _ -> pi
-    EString pi _ -> pi
-    ENeg pi _ -> pi
-    ENot pi _ -> pi
-    EMul pi _ _ _ -> pi
-    EAdd pi _ _ _ -> pi
-    ECmp pi _ _ _ -> pi
-    EAnd pi _ _ -> pi
-    EOr pi _ _ -> pi
+errorMsg :: String
+errorMsg = "checkTypes() should've detected this"
 
 defaultValue :: Type PInfo -> Interpreter Var
 defaultValue t = do
@@ -67,21 +52,21 @@ semInt expr = do
     val <- semExpr expr
     case val of
         VInt x -> return x
-        _ -> throwError (atPosition (getPosition expr) ++ "int expected")
+        _ -> throwError errorMsg
 
 semBool :: Expr PInfo -> Interpreter Bool
 semBool expr = do
     val <- semExpr expr
     case val of
         VBool x -> return x
-        _ -> throwError (atPosition (getPosition expr) ++ "bool expected")
+        _ -> throwError errorMsg
 
 semString :: Expr PInfo -> Interpreter String
 semString expr = do
     val <- semExpr expr
     case val of
         VString x -> return x
-        _ -> throwError (atPosition (getPosition expr) ++ "string expected")
+        _ -> throwError errorMsg
 
 semExpr :: Expr PInfo -> Interpreter Var
 semExpr expr = do
@@ -89,16 +74,16 @@ semExpr expr = do
     (vEnv, fEnv) <- ask
     case expr of
         EVar pi vName -> case M.lookup vName vEnv of
-            Nothing -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
+            Nothing -> throwError errorMsg
             Just loc -> case M.lookup loc store of
-                Nothing -> throwError (atPosition (getPosition expr) ++ "no value at location: " ++ show loc)
+                Nothing -> throwError errorMsg
                 Just var -> return var
         ELitInt _ n -> return (VInt n)
         ELitTrue _ -> return (VBool True)
         ELitFalse _ -> return (VBool False)
         EApp pi fName exprs -> case M.lookup fName fEnv of
             Just (VFunc f) -> f exprs
-            _ -> throwError (atPosition (getPosition expr) ++ "function " ++ show fName ++ " not declared")
+            _ -> throwError errorMsg
         EString _ s -> return (VString (filter (/= '"') s))
         ENeg _ exp -> do
             val <- semInt exp
@@ -171,7 +156,7 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
             func :: Env -> [Expr PInfo] -> Interpreter Var
             func funcEnv exprs =
                 do
-                    when (length exprs /= length args) (throwError ("function" ++ show fName ++ "called with wrong number of arguments"))
+                    when (length exprs /= length args) (throwError errorMsg)
 
                     callEnv <- ask
                     args <- local (const callEnv) (setArgsFromExprs (zip args exprs))
@@ -192,9 +177,9 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                 (vEnv, fEnv) <- ask
                 case expr of
                     EVar _ vName -> case M.lookup vName vEnv of
-                        Nothing -> throwError "variable not declared"
+                        Nothing -> throwError errorMsg
                         Just loc -> return (ArgRef pi t argName, Left loc)
-                    _ -> throwError "reference argument given a value"
+                    _ -> throwError errorMsg
 
             setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter [(Arg PInfo, Either Loc Var)]
             setArgsFromExprs [] = return []
@@ -238,7 +223,7 @@ semStmt stmt = do
         SAssign _ vName expr -> do
             val <- semExpr expr
             case M.lookup vName vEnv of
-                Nothing -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
+                Nothing -> throwError errorMsg
                 Just loc -> modify (M.insert loc val) >> return ()
         SCond _ expr stmt -> do
             cond <- semBool expr
@@ -275,20 +260,20 @@ startEnv = (M.empty, M.fromList [(Ident "printString", VFunc printString),
         printString :: [Expr PInfo] -> Interpreter Var
         printString [expr] = semExpr expr >>= \val -> case val of
             VString s -> lift $ lift $ lift $ hPutStrLn stdout s >> return VVoid
-            _ -> throwError "TC"
-        printString _ = throwError "TC"
+            _ -> throwError errorMsg
+        printString _ = throwError errorMsg
 
         printInt :: [Expr PInfo] -> Interpreter Var
         printInt [expr] = semExpr expr >>= \val -> case val of
             VInt n -> lift $ lift $ lift $ hPutStrLn stdout (show n) >> return VVoid
-            _ -> throwError "TC"
-        printInt _ = throwError "TC"
+            _ -> throwError errorMsg
+        printInt _ = throwError errorMsg
 
         printBool :: [Expr PInfo] -> Interpreter Var
         printBool [expr] = semExpr expr >>= \val -> case val of
             VBool b -> lift $ lift $ lift $ hPutStrLn stdout (show b) >> return VVoid
-            _ -> throwError "TC"
-        printBool _ = throwError "TC"
+            _ -> throwError errorMsg
+        printBool _ = throwError errorMsg
 
         assertFunc :: [Expr PInfo] -> Interpreter Var
         assertFunc [boolExpr, errorExpr] = do
@@ -297,22 +282,22 @@ startEnv = (M.empty, M.fromList [(Ident "printString", VFunc printString),
             if val then
                 return VVoid
             else
-                throwError ("assert failed: " ++ msg)
-        assertFunc _ = throwError "TC"
+                throwError ("Assertion failed: " ++ msg)
+        assertFunc _ = throwError errorMsg
 
         concatFunc :: [Expr PInfo] -> Interpreter Var
         concatFunc [expr1, expr2] = do
             str1 <- semString expr1
             str2 <- semString expr2
             return (VString (str1 ++ str2))
-        concatFunc _ = throwError "TC"
+        concatFunc _ = throwError errorMsg
 
 startInterpreter :: Program PInfo -> Interpreter ()
 startInterpreter (Prog _ vDecls fDefs) = do
     modify (const startStore)
     vdeclEnv <- local (const startEnv) (semVDecls vDecls)
     fdefEnv <- local (const vdeclEnv) (semFDefs fDefs)
-    when (M.notMember (Ident "main") (snd fdefEnv)) (throwError "main() undeclared")
+    when (M.notMember (Ident "main") (snd fdefEnv)) (throwError errorMsg)
     local (const fdefEnv) (semExpr (EApp Nothing (Ident "main") []))
     return ()
 
