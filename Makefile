@@ -1,8 +1,8 @@
+BNFC?=/home/students/inf/PUBLIC/MRJP/bin/students/bnfc
 all:
 	-mkdir build
 	cd src && \
-	bnfc --functor LattePlus.cf && \
-	#sed -i '/fail/d' ErrM.hs && \
+	$(BNFC) --functor LattePlus.cf && sed -i '/fail/d' ErrM.hs && \
 	happy -gca ParLattePlus.y && \
 	alex -g LexLattePlus.x && \
 	ghc --make Main.hs -odir ../build -hidir ../build -o ../interpreter
