@@ -10,15 +10,16 @@ import AbsLattePlus
 import ErrM
 
 import Interpreter ( runInterpreter )
+import Utils ( PInfo )
 
 type ParseFun a = [Token] -> Err a
 
 myLLexer = myLexer
 
-runFile :: ParseFun (Program (Maybe (Int, Int))) -> FilePath -> IO ()
+runFile :: ParseFun (Program PInfo) -> FilePath -> IO ()
 runFile p f = readFile f >>= run p
 
-run :: ParseFun (Program (Maybe (Int, Int))) -> String -> IO ()
+run :: ParseFun (Program PInfo) -> String -> IO ()
 run p s = let ts = myLLexer s in case p ts of
             Bad s   -> do
                         putStrLn "Interpreter failed to parse the program"

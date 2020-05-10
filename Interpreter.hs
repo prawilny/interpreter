@@ -76,14 +76,14 @@ semExpr expr = do
         EVar _ vName -> case M.lookup vName vEnv of
             Just loc -> case M.lookup loc store of
                 Just var -> return var
-                _ -> throwError errorMsg
-            _ -> throwError errorMsg
+                Nothing -> throwError errorMsg
+            Nothing -> throwError errorMsg
         ELitInt _ n -> return (VInt n)
         ELitTrue _ -> return (VBool True)
         ELitFalse _ -> return (VBool False)
         EApp _ fName exprs -> case M.lookup fName fEnv of
             Just (VFunc f) -> f exprs
-            _ -> throwError errorMsg
+            Nothing -> throwError errorMsg
         EString _ s -> return (VString ((init . tail) s)) -- won't fail, because in BNFC String is \"(symbol)*\"
         ENeg _ exp -> do
             val <- semInt exp
@@ -177,8 +177,8 @@ semFDef (DFun _ t fName args (FBody _ decls stmts ret)) =
                 (vEnv, _) <- ask
                 case expr of
                     EVar _ vName -> case M.lookup vName vEnv of
-                        Nothing -> throwError errorMsg
                         Just loc -> return (ArgRef Nothing t argName, Left loc)
+                        Nothing -> throwError errorMsg
                     _ -> throwError errorMsg
 
             setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter [(Arg PInfo, Either Loc Var)]
@@ -223,8 +223,8 @@ semStmt stmt = do
         SAssign _ vName expr -> do
             val <- semExpr expr
             case M.lookup vName vEnv of
-                Nothing -> throwError errorMsg
                 Just loc -> modify (M.insert loc val) >> return ()
+                Nothing -> throwError errorMsg
         SCond _ expr stmt -> do
             cond <- semBool expr
             if cond then semStmt stmt else return ()

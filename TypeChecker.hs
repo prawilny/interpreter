@@ -56,92 +56,93 @@ alloc = do
     store <- get
     return (if (M.null store) then 1 else (fst (M.findMax store) + 1))
 
-checkInt :: Expr PInfo -> TC TCType
-checkInt expr = do
-    store <- get
-    env <- ask
-    val <- checkExpr expr
-    case val of
-        TCInt -> return TCInt
-        _ -> throwError (atPosition (getPosition expr) ++ "int expected")
-
-checkBool :: Expr PInfo -> TC TCType
-checkBool expr = do
-    store <- get
-    env <- ask
-    val <- checkExpr expr
-    case val of
-        TCBool -> return TCBool
-        _ -> throwError (atPosition (getPosition expr) ++ "bool expected")
+enforce :: TCType -> Expr PInfo -> TC TCType
+enforce expected expr = do
+    got <- checkExpr expr
+    if (expected == got) then
+        return got
+    else
+        throwError (atPosition (getPosition expr) ++ show expected ++ " expected, got " ++ show got)
 
 checkExpr :: Expr PInfo -> TC TCType
 checkExpr expr = do
     store <- get
     (vEnv, fEnv) <- ask
     case expr of
-        EVar pi vName -> case M.lookup vName vEnv of
-            Nothing -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
+        EVar pi vName@(Ident vNameString) -> case M.lookup vName vEnv of
             Just loc -> case M.lookup loc store of
-                Nothing -> throwError (atPosition (getPosition expr) ++ "no value at location: " ++ show loc)
                 Just t -> return t
+                Nothing -> throwError (atPosition (getPosition expr)
+                            ++ "TypeChecker internal error - reference to empty location")
+            Nothing -> throwError (atPosition pi
+                        ++ "variable " ++ vNameString ++ " not declared")
         ELitInt _ n -> return TCInt
         ELitTrue _ -> return TCBool
         ELitFalse _ -> return TCBool
-        EApp pi fName exprs -> case M.lookup fName fEnv of
-            Just (TCFunc args tctype) -> do
+        EApp pi fName@(Ident fNameString) exprs -> case M.lookup fName fEnv of
+            Just (TCFunc args retType) -> do
                 if (length args /= length exprs) then
-                    throwError "function called with bad number of arguments"
+                    throwError (atPosition pi ++ "function " ++ fNameString
+                        ++ " called with bad number of arguments")
                 else
                     do
                         _ <- checkArgs (zip args exprs)
-                        return tctype
+                        return retType
                             where
                                 checkArg :: (TCArg, Expr PInfo) -> TC ()
-                                checkArg (TCArgRef expectedType, EVar _ vName) = do
+                                checkArg (TCArgRef expectedType, EVar pi vName) = do
                                     store <- get
                                     (vEnv, fEnv) <- ask
                                     case M.lookup vName vEnv of
-                                        Nothing -> throwError "argument passed by reference is not a variable"
+                                        Nothing -> throwError (atPosition pi
+                                            ++ "argument passed by reference is not a variable")
                                         Just loc -> case M.lookup loc store of
                                             Just gotType -> if (gotType == expectedType) then
                                                                 return ()
                                                             else
-                                                                throwError ("(reference) expected " ++ show expectedType ++ " got " ++ show gotType)
-                                            Nothing -> throwError "something should've been here..."
-                                checkArg (TCArgRef _, _) = throwError "non-variable passed by reference"
+                                                                throwError (atPosition pi
+                                                                    ++ "expected &" ++ show expectedType
+                                                                    ++ ", got &" ++ show gotType)
+                                            Nothing -> throwError (atPosition (getPosition expr)
+                                                ++ "TypeChecker internal error - reference to empty location")
+                                checkArg (TCArgRef _, expr) = do
+                                    throwError (atPosition (getPosition expr)
+                                        ++ "non-variable passed by reference")
                                 checkArg (TCArgVal expectedType, expr) = do
                                     gotType <- checkExpr expr
                                     if (gotType == expectedType) then
                                         return ()
                                     else
-                                        throwError ("expected (call)" ++ show expectedType ++ "got " ++ show gotType)
+                                        throwError (atPosition (getPosition expr)
+                                            ++ show expectedType ++ " expected, got " ++ show gotType)
 
                                 checkArgs :: [(TCArg, Expr PInfo)] -> TC ()
                                 checkArgs [] = return ()
                                 checkArgs (z:zs) = checkArg z >> checkArgs zs
-
-            _ -> throwError (atPosition (getPosition expr) ++ "function " ++ show fName ++ " not declared")
+            Nothing -> throwError (atPosition pi ++ "function " ++ fNameString ++ " not declared")
         EString _ s -> return TCString
-        ENeg _ exp -> checkInt exp >> return TCInt
-        ENot _ exp -> checkBool exp >> return TCBool
-        EMul _ exp1 op exp2 -> checkInt exp1 >> checkInt exp2 >> return TCInt
-        EAdd _ exp1 op exp2 -> checkInt exp1 >> checkInt exp2 >> return TCInt
-        ECmp _ exp1 cmp exp2 -> checkInt exp1 >> checkInt exp2 >> return TCBool
-        EAnd _ exp1 exp2 -> checkBool exp1 >> checkBool exp2 >> return TCBool
-        EOr _ exp1 exp2 -> checkBool exp1 >> checkBool exp2 >> return TCBool
+        ENeg _ exp -> enforce TCInt exp >> return TCInt
+        ENot _ exp -> enforce TCBool exp >> return TCBool
+        EMul _ exp1 op exp2 -> enforce TCInt exp1 >> enforce TCInt exp2 >> return TCInt
+        EAdd _ exp1 op exp2 -> enforce TCInt exp1 >> enforce TCInt exp2 >> return TCInt
+        ECmp _ exp1 cmp exp2 -> enforce TCInt exp1 >> enforce TCInt exp2 >> return TCBool
+        EAnd _ exp1 exp2 -> enforce TCBool exp1 >> enforce TCBool exp2 >> return TCBool
+        EOr _ exp1 exp2 -> enforce TCBool exp1 >> enforce TCBool exp2 >> return TCBool
 
 checkVDecl :: VDecl PInfo -> TC Env
 checkVDecl (DVar _ t i) = do
     (vEnv, fEnv) <- ask
     newLoc <- alloc
     newVal <- case i of
-        NoInit pi _ -> return (toTCType t)
+        NoInit _ _ -> return (toTCType t)
         Init pi _ expr -> do
-            exprType <- checkExpr expr
-            if (exprType == (toTCType t)) then
-                return exprType
+            gotType <- checkExpr expr
+            let expectedType = toTCType t
+            if (gotType == expectedType) then
+                return gotType
             else
-                throwError ("excepted " ++ show (toTCType t))
+                throwError (atPosition pi
+                    ++ show expectedType ++ " expected, got " ++ show gotType)
     let vName = case i of
             NoInit _ x -> x
             Init _ x _ -> x
@@ -162,9 +163,13 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                         ArgVal _ t _ -> TCArgVal (toTCType t)
                         ArgRef _ t _ -> TCArgRef (toTCType t)
                         ) args
+        let expectedType = toTCType t
         let newEnv = (vEnv, (M.insert fName (TCFunc tcArgs (toTCType t)) fEnv))
-        _ <- func newEnv
-        return newEnv
+        gotType <- func newEnv
+        if (gotType == expectedType) then
+            return newEnv
+        else
+            throwError (atPosition pi ++ show expectedType ++ " return type expected, got " ++ show gotType)
         where
             func :: Env -> TC TCType
             func funcEnv =
@@ -173,16 +178,9 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                     declEnv <- local (const argEnv) (checkVDecls decls)
                     local (const declEnv) (checkStmts stmts)
                     local (const declEnv) (case ret of
-                                            RetVoid _ -> case toTCType t of
-                                                TCVoid -> return TCVoid
-                                                _ -> throwError "nonvoid function returns void"
-                                            RetVal _ expr -> do
-                                                    resultType <- checkExpr expr
-                                                    if (resultType == toTCType t) then
-                                                        return resultType
-                                                    else
-                                                        throwError ("excepted " ++ show (toTCType t))
-                                                )
+                        RetVoid _ -> return TCVoid
+                        RetVal _ expr -> checkExpr expr)
+
             setEnvFromAnyArg :: Type PInfo -> Ident -> TC Env
             setEnvFromAnyArg t argName = do
                 (vEnv, fEnv) <- ask
@@ -216,26 +214,29 @@ checkStmt stmt = do
             vdeclEnv <- checkVDecls ds
             local (const vdeclEnv) (checkStmts stmts)
             return ()
-        SAssign _ vName expr -> do
-            val <- checkExpr expr
+        SAssign pi vName@(Ident vNameString) expr -> do
+            gotType <- checkExpr expr
             case M.lookup vName vEnv of
-                Nothing -> throwError (atPosition (getPosition expr) ++ "variable " ++ show vName ++ " not declared")
                 Just loc -> case M.lookup loc store of
-                    Just tctype -> do
-                                    if tctype == val then
-                                        return ()
-                                    else
-                                        throwError ("expected " ++ show tctype)
-                    Nothing -> throwError "nothing in memory"
-        SCond _ expr stmt -> checkBool expr >> checkStmt stmt >> return ()
+                    Just expectedType -> do
+                        if expectedType == gotType then
+                            return ()
+                        else
+                            throwError (atPosition pi
+                                ++ show expectedType ++ " expected, got " ++ show gotType)
+                    Nothing -> throwError (atPosition pi
+                                ++ "TypeChecker internal error - reference to empty location")
+                Nothing -> throwError (atPosition pi
+                                ++ "variable " ++ vNameString ++ " not declared")
+        SCond _ expr stmt -> enforce TCBool expr >> checkStmt stmt >> return ()
         SCondElse _ expr (Blk _ dsTrue stmtsTrue) (Blk _ dsFalse stmtsFalse) -> do
-            _ <- checkBool expr
+            _ <- enforce TCBool expr
             trueEnv <- checkVDecls dsTrue
             local (const trueEnv) (checkStmts stmtsTrue)
             falseEnv <- checkVDecls dsFalse
             local (const falseEnv) (checkStmts stmtsFalse)
             return ()
-        SWhile _ expr innerStmt -> checkBool expr >> checkStmt innerStmt >> return ()
+        SWhile _ expr innerStmt -> enforce TCBool expr >> checkStmt innerStmt >> return ()
         SExp _ expr -> checkExpr expr >> return ()
 
 checkStmts :: [Stmt PInfo] -> TC ()
@@ -267,10 +268,3 @@ checkTypes :: Program PInfo -> TCResult ()
 checkTypes program = do
     runReaderT (execStateT (startTC program) M.empty) (M.empty, M.empty)
     return ()
-
-runTC :: Program PInfo -> IO ()
-runTC program = do
-    check <- runExceptT (checkTypes program)
-    case check of
-        Left error -> hPutStrLn stderr ("Runtime error: " ++ error)
-        Right io -> return io
