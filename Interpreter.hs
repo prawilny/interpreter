@@ -73,18 +73,18 @@ semExpr expr = do
     store <- get
     (vEnv, fEnv) <- ask
     case expr of
-        EVar pi vName -> case M.lookup vName vEnv of
-            Nothing -> throwError errorMsg
+        EVar _ vName -> case M.lookup vName vEnv of
             Just loc -> case M.lookup loc store of
-                Nothing -> throwError errorMsg
                 Just var -> return var
+                _ -> throwError errorMsg
+            _ -> throwError errorMsg
         ELitInt _ n -> return (VInt n)
         ELitTrue _ -> return (VBool True)
         ELitFalse _ -> return (VBool False)
-        EApp pi fName exprs -> case M.lookup fName fEnv of
+        EApp _ fName exprs -> case M.lookup fName fEnv of
             Just (VFunc f) -> f exprs
             _ -> throwError errorMsg
-        EString _ s -> return (VString (filter (/= '"') s))
+        EString _ s -> return (VString ((init . tail) s)) -- won't fail, because in BNFC String is \"(symbol)*\"
         ENeg _ exp -> do
             val <- semInt exp
             return (VInt (-1 * val))
@@ -97,10 +97,10 @@ semExpr expr = do
             case op of
                 OTimes _ -> return (VInt (val1 * val2))
                 OMod _ -> case val2 of
-                    0 -> throwError (atPosition (getPosition exp2) ++ "division by 0")
+                    0 -> throwError (atPosition (getPosition expr) ++ "division by 0")
                     _ -> return (VInt (val1 `mod` val2))
                 ODiv _ -> case val2 of
-                    0 -> throwError (atPosition (getPosition exp2) ++ "modulo by 0")
+                    0 -> throwError (atPosition (getPosition expr) ++ "modulo by 0")
                     _ -> return (VInt (val1 `div` val2))
         EAdd _ exp1 op exp2 -> do
             val1 <- semInt exp1
@@ -147,7 +147,7 @@ semVDecls (d:ds) = do
     local (const newEnv) (semVDecls ds)
 
 semFDef :: FDef PInfo -> Interpreter Env
-semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
+semFDef (DFun _ t fName args (FBody _ decls stmts ret)) =
     do
         (vEnv, fEnv) <- ask
         let newEnv = (vEnv, (M.insert fName (VFunc (func newEnv)) fEnv))
@@ -169,16 +169,16 @@ semFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                                             RetVal _ expr -> semExpr expr)
 
             setArgFromExpr :: (Arg PInfo, Expr PInfo) -> Interpreter (Arg PInfo, Either Loc Var)
-            setArgFromExpr (ArgVal pi t argName, expr) = do
+            setArgFromExpr (ArgVal _ t argName, expr) = do
                 env <- ask
                 val <- semExpr expr
-                return (ArgVal pi t argName, Right val)
-            setArgFromExpr (ArgRef pi t argName, expr) = do
-                (vEnv, fEnv) <- ask
+                return (ArgVal Nothing t argName, Right val)
+            setArgFromExpr (ArgRef _ t argName, expr) = do
+                (vEnv, _) <- ask
                 case expr of
                     EVar _ vName -> case M.lookup vName vEnv of
                         Nothing -> throwError errorMsg
-                        Just loc -> return (ArgRef pi t argName, Left loc)
+                        Just loc -> return (ArgRef Nothing t argName, Left loc)
                     _ -> throwError errorMsg
 
             setArgsFromExprs :: [(Arg PInfo, Expr PInfo)] -> Interpreter [(Arg PInfo, Either Loc Var)]
@@ -236,7 +236,10 @@ semStmt stmt = do
             return ()
         SWhile _ expr innerStmt -> do
             cond <- semBool expr
-            if cond then semStmt innerStmt >> semStmt stmt else return ()
+            if cond then
+                semStmt innerStmt >> semStmt stmt
+            else
+                return ()
         SExp _ expr -> do
             _ <- semExpr expr
             return ()
