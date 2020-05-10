@@ -124,7 +124,7 @@ checkExpr expr = do
                                             Just gotType -> if (gotType == expectedType) then
                                                                 return ()
                                                             else
-                                                                throwError ("expected " ++ show expectedType)
+                                                                throwError ("(reference) expected " ++ show expectedType ++ " got " ++ show gotType)
                                             Nothing -> throwError "something should've been here..."
                                 checkArg (TCArgRef _, _) = throwError "non-variable passed by reference"
                                 checkArg (TCArgVal expectedType, expr) = do
@@ -132,7 +132,7 @@ checkExpr expr = do
                                     if (gotType == expectedType) then
                                         return ()
                                     else
-                                        throwError ("expected " ++ show expectedType)
+                                        throwError ("expected (call)" ++ show expectedType ++ "got " ++ show gotType)
 
                                 checkArgs :: [(TCArg, Expr PInfo)] -> TC ()
                                 checkArgs [] = return ()
@@ -144,9 +144,9 @@ checkExpr expr = do
         ENot _ exp -> checkBool exp >> return TCBool
         EMul _ exp1 op exp2 -> checkInt exp1 >> checkInt exp2 >> return TCInt
         EAdd _ exp1 op exp2 -> checkInt exp1 >> checkInt exp2 >> return TCInt
-        ECmp _ exp1 cmp exp2 -> checkInt exp1 >> checkInt exp2 >> return TCInt
-        EAnd _ exp1 exp2 -> checkInt exp1 >> checkInt exp2 >> return TCBool
-        EOr _ exp1 exp2 -> checkInt exp1 >> checkInt exp2 >> return TCBool
+        ECmp _ exp1 cmp exp2 -> checkInt exp1 >> checkInt exp2 >> return TCBool
+        EAnd _ exp1 exp2 -> checkBool exp1 >> checkBool exp2 >> return TCBool
+        EOr _ exp1 exp2 -> checkBool exp1 >> checkBool exp2 >> return TCBool
 
 checkVDecl :: VDecl PInfo -> TC Env
 checkVDecl (DVar _ t i) = do
@@ -177,9 +177,9 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
     do
         (vEnv, fEnv) <- ask
         let tcArgs = fmap (\arg -> case arg of
-                                    ArgVal _ t _ -> TCArgVal (toTCType t)
-                                    ArgRef _ t _ -> TCArgRef (toTCType t)
-                                    ) args
+                        ArgVal _ t _ -> TCArgVal (toTCType t)
+                        ArgRef _ t _ -> TCArgRef (toTCType t)
+                        ) args
         let newEnv = (vEnv, (M.insert fName (TCFunc tcArgs (toTCType t)) fEnv))
         _ <- func newEnv
         return newEnv
@@ -201,14 +201,16 @@ checkFDef (DFun pi t fName args (FBody _ decls stmts ret)) =
                                                     else
                                                         throwError ("excepted " ++ show (toTCType t))
                                                 )
-
-            setEnvFromArg :: Arg PInfo -> TC Env
-            setEnvFromArg (ArgVal _ t argName) = do
+            setEnvFromAnyArg :: Type PInfo -> Ident -> TC Env
+            setEnvFromAnyArg t argName = do
                 (vEnv, fEnv) <- ask
                 newLoc <- alloc
                 modify (M.insert newLoc (toTCType t))
                 return ((M.insert argName newLoc vEnv), fEnv)
-            setEnvFromArg (ArgRef _ _ argName) = setEnvFromArg (ArgVal Nothing t argName)
+
+            setEnvFromArg :: Arg PInfo -> TC Env
+            setEnvFromArg (ArgVal _ t argName) = setEnvFromAnyArg t argName
+            setEnvFromArg (ArgRef _ t argName) = setEnvFromAnyArg t argName
 
             setEnvFromArgs :: [Arg PInfo] -> TC Env
             setEnvFromArgs [] = ask

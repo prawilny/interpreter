@@ -25,6 +25,7 @@ runFile p f = putStrLn f >> readFile f >>= run p
 run :: ParseFun (Program (Maybe (Int, Int))) -> String -> IO ()
 run p s = let ts = myLLexer s in case p ts of
             Bad s   -> do
+                        putStrLn "Interpreter failed to parse the program"
                         exitFailure
             Ok tree -> do
                         runInterpreter tree

@@ -99,7 +99,7 @@ semExpr expr = do
         EApp pi fName exprs -> case M.lookup fName fEnv of
             Just (VFunc f) -> f exprs
             _ -> throwError (atPosition (getPosition expr) ++ "function " ++ show fName ++ " not declared")
-        EString _ s -> return (VString s)
+        EString _ s -> return (VString (filter (/= '"') s))
         ENeg _ exp -> do
             val <- semInt exp
             return (VInt (-1 * val))

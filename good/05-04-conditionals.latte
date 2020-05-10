@@ -1,16 +1,15 @@
-void f(int arg){
+void f (int arg){
 	if (arg < 0) {
-		printString("-\n");
+		printString("-");
 	} else {
 		if (arg > 0)
-			printString("+\n");
+			printString("+");
 	}
 	if(arg < 0)
 		arg = -arg;
 
 	while (arg > 0){
 		printInt(arg);
-		printString("\n")
 		arg = arg - 1;
 	}
 	return;
