@@ -8,13 +8,10 @@ Jest on względem "podstawowego" języka wzbogacony o:
 Tak jak w Latte, logiczne ORAZ ma wyższy priorytet niż logiczne LUB.
 
 W porównaniu z "podstawowym" językiem Latte, Latte+ utracił postinkrementację i postdekrementację.
-Ponadto ograniczyłem:
+Ograniczyłem również:
 - strukturę bloku do "[deklaracja zmiennej] [instrukcja]",
 - ciało funkcji do "[deklaracja zmiennej] [instrukcja] return (wyrażenie){0,1}",
 - strukturę pliku źródłowego - do "[deklaracje zmiennych] [deklaracje funkcji]".
-
-Względem deklaracji nie udało mi się zrealizować uprzednio zadeklarowanych: obsługi structów, instrukcji break i continue oraz pascalowej pętli for. Nie ma też wbudowanych funkcji get().
-W związku z powyższym interpreter ma - w moim zamiarze - spełniać punkty 1-7 i 9-12 z ogólnych kryteriów oceny języka imperatywnego.
 
 Ponadto, dostępne są wbudowane funkcje:
 - void assert(bool assertion, string errorMsg),
